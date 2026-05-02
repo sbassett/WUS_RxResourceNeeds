@@ -38,3 +38,11 @@ BFN = AFN / BD
 
 - Annual Resources Required (annual acres time resource intensity)
 
+# Model Inputs and Sources
+These data are saved to data/raw/ and then processed to data/processed/ for use in the model.
+
+| Input | Source | Format | Raw Location | Processed Location |
+| -------- | -------- | -------- | -------- | -------- |
+| Fireshed Registry (4th Ed.) Subfiresheds | https://www.fs.usda.gov/rds/archive/catalog/RDS-2020-0054-4 | Shapefile | data/raw/RDS-2020-0054-4.zip | data/processed/firesheds.gpkg\|layername=projectAreas |
+| Landfire BPS | https://www.landfire.gov/ | Raster | data/raw/ | data/processed/ |
+| Swain et al. 2023 | https://www.nature.com/articles/s43247-023-00993-1 | Table | data/raw/ | data/processed/ |
