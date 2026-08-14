@@ -16,6 +16,20 @@ Burn Days (Swain et al 2023)
 Daily GridMET https://www.climatologylab.org/gridmet.html
 
 
+## Burn Day Model
+
+### Burn Day Thresholds
+Following Swain et al 2023, create a burn window definition with high and low bounds for 
+    mid-flame wind speed
+    relative humidity
+    air temperature
+
+    
+### Burn Day Classification For Each GridMet Pixel
+Following Swain et al 2023, use daily gridmet data, augmented with more fuels metrics calculated following "Cohen, J. D. & Deeming, J. E. The national fire-danger rating system: basic equations. (U.S. Department of Agriculture, Forest Service, Pacific Southwest Forest and Range Experiment Station, 1985)." Maybe do bias correction too following Swain which cites Barros et al 2021.
+
+Classify every pixel for every day as in or out of prescription.
+
 
 
 # Fireshed project level resource needs by week/bi-week/month/season/year [see what's feasible for timescale]
