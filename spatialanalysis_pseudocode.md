@@ -9,6 +9,7 @@ Compare to known fire events (wildcad etc.) are burns happening during predicted
 
 Burn windows (for a place) are rival or non-rival through space and time. Time is the biggest determination of if we need more people or not. If burn windows are not synced up then we need fewer people. If burn windows happen only once every 5 years (in a given fireshed) then that changes how many acres need to burn in that "good fire" year.
 
+"Burn window synchrony between firesheds/project areas will be something we need to track in our analysis. If all our burn windows happen at the same time in NM then we need more people than if our burn windows roll sequentially from south to north (or in other sequential manner). There's also the inter-annual variability that we probably need to track, and plan to have sufficient personnel on-hand for good years, but also balance so we don't have people/engines standing around that we don't need in too many years."
 
 
 ## Data Sources
