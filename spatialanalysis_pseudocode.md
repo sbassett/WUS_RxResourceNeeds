@@ -19,6 +19,7 @@ Daily GridMET https://www.climatologylab.org/gridmet.html
 
 ## Burn Day Model
 
+##### START WORKING HERE on the BURN DAYS
 ### Burn Day Thresholds
 Following Swain et al 2023, create a burn window definition with high and low bounds for 
     mid-flame wind speed
@@ -46,6 +47,64 @@ Classify every pixel for every day as in or out of prescription.
             Resource Mix [accross three phases? firing, holding, contingency]
                 Unit Complexity [function of(terrain, unit homogeneity, adjacent fuels, values at risk)]
                 Firing Type [function of annual burn area and or unit size]
+
+
+## Burn Unit Size and Complexity Model
+Model unit complexity distribution  (modeled at the fireshed project level, from sub-fireshed-project-level patches)
+        Unit Complexity [function of(terrain, unit homogeneity, adjacent fuels, values at risk)]
+
+
+Pull out contiguous patches (combinations of landowner, flame length bin under prescription conditions, WUI-context, treatable flag (not burned = dense development, non-forested, non-dry forest {spruce-fir, wetlands, PJ, etc.}))
+
+For each patch, extract the:
+ - expected fire rate of spread (under braketing scenarios, one on the hot side of teh prescription and on eon teh cool side of teh prescription).
+ - slope (greater slope = grater complexity, might not need since slope is baked into the rate of spread)
+ - try looking at homogeneity of aspects? (like neighborhood dissimilary of terrain)
+ - distance to road (greater distance = greater complexity)
+ - fuel-type homogeneity (like neighborhood dissimilary of fuels)
+ - wui map (see Community Wildfire Risk Reduction Zones in https://wildfirerisk.org/download/)
+
+[maybe for adjacent fuels, use overall fireshed project area summary of area that will burn at too hot intensities under prescriptin conditions, so burnign in a dense fireshed project area is risker than burning in a less dense  project area]
+
+
+
+From the spatial complexity map (, low, medium, high complexity), summarize the total acres of each complexity class by [landowner (coarse bins like federal/non-fed), and expected fire behavior in chains per hour (ok to bin )]
+
+
+
+
+For each fireshed, model the distribution of burn unit sizes.
+For non-wui the maximum size is 2,000 acres and the minimum is 441 acres (based on USFS burn plan reporting, Jason found it.) In WUI (and maybe other higher-complexity areas), the maximum fire size is 441 acres.
+
+
+Heavy fuels make units smaller.
+Absence of fuels make unit smaller.
+Hazards like powerlines, structures.
+
+Water availability might make units or acres per day smaller.
+Introducing mosaics through seasonality and rotation in burn blocks (treating burn blocks in phases, or burned and unburned).
+
+Output should be in bins: 50-100, 101-200, 201-400, 401-800, 801-1200,1201-1600, 1601-2000.
+
+Also should be binned by unit complexity, low, medium, high. 
+
+## Firing method model
+                Firing Type [function of annual burn area and or unit size]
+    Output: Create a table with same matrix of burn unit size by burn unit complexity, and specify which fire size/compleity classes are ignited by hand, drone, or helicopter.
+
+    
+    
+    Drones increase opportunity for aerial ignitions.
+
+    Wouldn't use drones where fuels are high.
+    Resources are a limiting factor, when they can they use teh drones.
+
+
+
+## Chains Per Hour of Line Production Needed
+                Expected Fire Behavior in Project Area under X percentile conditions
+                    Fuel Model(s), Weather, Terrain
+            Resource Mix [accross three phases? firing, holding, contingency]
 
 
 ## Resources Required SUmmarized at the State Level [NM as pilot]
