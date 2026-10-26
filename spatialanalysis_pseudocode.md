@@ -1,7 +1,7 @@
 
 ## Other Questions
 Which firesheds experience burn days at the same time? (and compete for Rx resources)
-    Rivaly or Competition Between Firesheds or SubFiresheds can be resolved through prioritization including a scarcity of burn days metric. [is this burn day synchrony?]
+    Rivalry or Competition Between Firesheds or SubFiresheds can be resolved through prioritization including a scarcity of burn days metric. [is this burn day synchrony?]
 How predicable are burn day patterns in each fireshed? Maybe probability of burn days in each week of the year? (like exceedance probability of 1,2,3,4,5,6 burn days)
 
 Compare to known fire events (wildcad etc.) are burns happening during predicted (based on observed data) burn windows?
@@ -20,7 +20,7 @@ Daily GridMET https://www.climatologylab.org/gridmet.html
 ## Burn Day Model
 
 ##### START WORKING HERE on the BURN DAYS
-### Burn Day Thresholds
+### Burn Day Thresholds 
 Following Swain et al 2023, create a burn window definition with high and low bounds for 
     mid-flame wind speed
     relative humidity
@@ -92,12 +92,12 @@ Also should be binned by unit complexity, low, medium, high.
                 Firing Type [function of annual burn area and or unit size]
     Output: Create a table with same matrix of burn unit size by burn unit complexity, and specify which fire size/compleity classes are ignited by hand, drone, or helicopter.
 
+        burns over 1000 acres benefit from heli ignitions, and the time required is halved
     
-    
-    Drones increase opportunity for aerial ignitions.
+        Drones increase opportunity for aerial ignitions.
 
-    Wouldn't use drones where fuels are high.
-    Resources are a limiting factor, when they can they use teh drones.
+        Wouldn't use drones where fuels are high.
+        Resources are a limiting factor, when they can they use the drones.
 
 
 
