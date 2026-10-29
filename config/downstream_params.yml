@@ -1,0 +1,45 @@
+# PLACEHOLDER parameters for the downstream (stub) stages. Every value here
+# is an assumption to be replaced with calibrated values; nothing below is
+# derived from data yet. Structure follows spatialanalysis_pseudocode.md.
+
+# Burn unit size bins (acres)
+size_bins:
+  - {bin: "50-100",    min: 50,   max: 100}
+  - {bin: "101-200",   min: 101,  max: 200}
+  - {bin: "201-400",   min: 201,  max: 400}
+  - {bin: "401-800",   min: 401,  max: 800}
+  - {bin: "801-1200",  min: 801,  max: 1200}
+  - {bin: "1201-1600", min: 1201, max: 1600}
+  - {bin: "1601-2000", min: 1601, max: 2000}
+
+# Unit size limits (USFS burn-plan reporting, per pseudocode)
+unit_size:
+  nonwui_min: 441
+  nonwui_max: 2000
+  wui_max: 441
+
+# Share of each project's annual Rx acres in WUI (placeholder until a WUI
+# layer, e.g. wildfirerisk.org Community Wildfire Risk Reduction Zones, is added)
+wui_share: 0.2
+
+# Complexity mix of annual Rx acres (placeholder until the complexity model)
+complexity_share: {low: 0.5, medium: 0.35, high: 0.15}
+
+# Firing method rules (applied to bin midpoint size)
+firing:
+  heli_min_acres: 1000        # units over this use helicopter ignition
+  heli_time_factor: 0.5       # heli halves firing time
+  drone_min_acres: 200        # drones for mid-size units...
+  drone_complexity: ["low", "medium"]   # ...not in high complexity / heavy fuels
+  acres_per_day: {hand: 150, drone: 300, heli: 600}   # firing production, ac/day
+
+# Required line production by complexity (chains/hour), placeholder
+line_production_ch_hr: {low: 10, medium: 20, high: 40}
+
+# Resources per active unit-day, by complexity (placeholder)
+resources_per_unit_day:
+  low:    {engines: 2, crews: 1, dozers: 0, burn_boss: 1, firing_boss: 1, holding_boss: 0}
+  medium: {engines: 3, crews: 1, dozers: 1, burn_boss: 1, firing_boss: 1, holding_boss: 1}
+  high:   {engines: 4, crews: 2, dozers: 1, burn_boss: 1, firing_boss: 1, holding_boss: 1}
+# Extra resources when aerial ignition is used
+aerial_extra: {heli: {helicopters: 1}, drone: {drone_teams: 1}}

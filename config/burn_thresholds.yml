@@ -1,0 +1,78 @@
+# Burn-window (RxDay) thresholds from Swain et al. 2023, Communications Earth &
+# Environment, Supplementary Table ST1 ("median lower and upper bounds from
+# existing burn plans"). Extracted to config/swain2023_ST1.csv by
+# R/extract_swain_st1.R. Bounds are inclusive.
+#
+# statistic: which daily pipeline layer the bound is applied to.
+#   Swain et al. 2023 Methods use afternoon (peak burning) conditions: daily
+#   maximum temperature, daily minimum RH, and daily-mean wind x 1.5. They
+#   reduce 10 m wind to mid-flame with a fixed 0.4; this pipeline uses Andrews
+#   (2012) WAFs from LANDFIRE fuels instead (see config/pipeline.yml wind).
+# enabled: false = recorded but not applied.
+
+source: "Swain et al. 2023, Supplementary Table ST1"
+
+thresholds:
+  - variable: temperature
+    statistic: tmmx          # gridMET daily max temperature
+    units: degC
+    enabled: true
+    all:       {min: 5.8,  max: 29.4}
+    forest:    {min: 7.2,  max: 28.9}
+    nonforest: {min: 4.4,  max: 29.4}
+
+  - variable: relative_humidity
+    statistic: rmin          # gridMET daily min RH
+    units: pct
+    enabled: true
+    all:       {min: 16, max: 60}
+    forest:    {min: 15, max: 60}
+    nonforest: {min: 20, max: 70}
+
+  - variable: midflame_wind
+    statistic: midflame      # gridMET vs (10 m) / 1.15 x Andrews WAF
+    units: m_s
+    enabled: true
+    all:       {min: 0, max: 5.0}
+    forest:    {min: 0, max: 4.5}
+    nonforest: {min: 0, max: 5.4}
+
+  - variable: ignition_component
+    statistic: ic
+    units: index
+    enabled: false           # needs NFDRS spread component; not computed in v1
+    all:       {min: 20, max: 65}
+    forest:    {min: 20, max: 75}
+    nonforest: {min: 21, max: 60}
+
+  - variable: fm1
+    statistic: fm1           # NFDRS 1-hr, computed (Cohen & Deeming 1985)
+    units: pct
+    enabled: true
+    all:       {min: 4, max: 12}
+    forest:    {min: 4, max: 12}
+    nonforest: {min: 4, max: 13}
+
+  - variable: fm10
+    statistic: fm10          # NFDRS 10-hr, computed (Cohen & Deeming 1985)
+    units: pct
+    enabled: true
+    all:       {min: 6, max: 14}
+    forest:    {min: 6, max: 14}
+    nonforest: {min: 6, max: 15}
+
+  - variable: fm100
+    statistic: fm100         # gridMET 100-hr
+    units: pct
+    enabled: true
+    all:       {min: 7.5, max: 15}
+    forest:    {min: 7.5, max: 15}
+    nonforest: {min: null, max: null}   # "–" in ST1: not applied
+
+  - variable: fm1000
+    statistic: fm1000        # gridMET 1000-hr
+    units: pct
+    enabled: true
+    all:       {min: 10, max: 20}
+    forest:    {min: 10, max: 20}
+    nonforest: {min: null, max: null}   # "–" in ST1: not applied

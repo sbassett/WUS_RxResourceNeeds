@@ -1,0 +1,8 @@
+"variable","statistic","min","max","enabled"
+"temperature","tmmx",7.2,28.9,TRUE
+"relative_humidity","rmin",15,60,TRUE
+"midflame_wind","midflame",0,4.5,TRUE
+"fm1","fm1",4,12,TRUE
+"fm10","fm10",6,14,TRUE
+"fm100","fm100",7.5,15,TRUE
+"fm1000","fm1000",10,20,TRUE

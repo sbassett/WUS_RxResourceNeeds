@@ -2,6 +2,12 @@
 data/
 outputs/
 
+# targets store and renv library
+_targets/
+renv/library/
+renv/staging/
+renv/local/
+
 # History files
 .Rhistory
 .Rapp.history

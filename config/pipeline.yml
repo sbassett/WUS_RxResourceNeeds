@@ -1,0 +1,111 @@
+# Pipeline configuration. Edit here; _targets.R reads this file and
+# re-runs only the stages whose inputs changed.
+
+# Years to process. Development runs use a short span; the full run is
+# 1979 through the last complete year.
+years:
+  start: 1979
+  end: 2025
+
+# Study area
+aoi:
+  state_abbr: "NM"           # Fireshed_State / Census state used to select units
+  select: "intersects"       # keep subfiresheds intersecting the state, in full
+  buffer_km: 5               # buffer around unit bbox when fetching rasters
+crs: 5070                     # analysis CRS (NAD83 / CONUS Albers)
+
+# Analysis units: Fireshed Registry 4th ed. (RDS-2020-0054-4). The 4th edition
+# replaces "project areas" with subfiresheds (~25k ac).
+units:
+  url: "https://www.fs.usda.gov/rds/archive/products/RDS-2020-0054-4/RDS-2020-0054-4.zip"
+  gdb: "data/raw/RDS-2020-0054-4/Data/Firesheds_CONUS.gdb"
+  layer: "Subfiresheds"
+  id_field: "Subfireshed_ID"
+  out: "data/processed/firesheds.gpkg"
+  out_layer: "projectAreas"
+
+# gridMET (Abatzoglou 2013) via THREDDS OPeNDAP aggregations
+gridmet:
+  url_template: "http://thredds.northwestknowledge.net:8080/thredds/dodsC/agg_met_{var}_1979_CurrentYear_CONUS.nc"
+  # Variables fetched and cached. Required by the burn-day model:
+  # tmmx, rmin, vs, fm100, fm1000, srad. Others are optional extras
+  # (tmmn, rmax, sph, pr, erc); add them here to cache them too.
+  vars: ["tmmx", "rmin", "vs", "fm100", "fm1000", "srad"]
+  cache_dir: "data/raw/gridmet"
+
+# NFDRS 1-hr / 10-hr fuel moisture (Cohen & Deeming 1985)
+nfdrs:
+  # Fuel-level temperature/RH adjustment for state of weather (cloudiness).
+  # "srad": derive state of weather from gridMET srad / clear-sky radiation.
+  # "none": use screen-height Tmax / RHmin directly.
+  cloud_adjust: "srad"
+  # srad / clear-sky ratio breakpoints for SOW 0 (clear), 1 (scattered),
+  # 2 (broken); below the last value = SOW 3 (overcast). Approximation; see README.
+  sow_breaks: [0.9, 0.7, 0.5]
+  out_dir: "data/processed/nfdrs"
+
+# Wind
+wind:
+  # gridMET vs is a daily mean; Swain et al. 2023 (Methods) scale it by 1.5 to
+  # represent afternoon wind. Set to 1 to use the daily mean as-is.
+  afternoon_factor: 1.5
+  u10_to_u20ft: 1.15         # U20ft = U10m / 1.15 (Lawson & Armitage 2008)
+  waf_table: "config/waf_fbfm40.csv"
+  sheltered_min_f: 0.05      # crown fill portion above which sheltered WAF is used
+  sheltered_min_ch_ft: 6     # canopy height (ft) below which unsheltered WAF is used
+
+# Burn-day thresholds
+thresholds:
+  file: "config/burn_thresholds.yml"
+  plan_set: "forest"         # one of: all, forest, nonforest (Swain ST1 columns)
+
+# LANDFIRE via LFPS v2 (rlandfire). Requires env var LANDFIRE_EMAIL.
+landfire:
+  products:
+    fbfm40: "LF2022_FBFM40"
+    cc: "LF2022_CC"
+    ch: "LF2022_CH"
+    cbh: "LF2022_CBH"
+    evt: "LF2022_EVT"
+    bps: "LF2020_BPS"
+    slope: "LF2020_SlpD"
+  resolution: 30
+  tile_deg: 1.0              # request tiles of tile_deg x tile_deg degrees
+  dir: "data/raw/landfire"
+
+# Target (treatable) area
+target_area:
+  classes_file: "config/treatable_classes.csv"   # EVT name patterns -> treatable
+  slope:
+    enabled: true
+    max_pct: 25              # NRCS 2010 soil-movement guidance
+  wilderness:
+    enabled: false           # needs a wilderness boundary layer (not yet sourced)
+    path: "data/raw/wilderness.gpkg"
+  min_patch:
+    enabled: true
+    acres: 20
+  out_dir: "data/processed/landfire"
+
+# Burn-day classification output
+burn_days:
+  out_dir: "data/processed/burn_days"
+
+# Project-area rollup
+rollup:
+  burn_day_share: 0.5        # project burn day when rx_share >= this
+  out: "data/processed/rx_share_daily.parquet"
+  # Week definition: fixed 7-day day-of-year bins; days 365/366 fold into 52.
+  n_weeks: 52
+
+# Predictability
+summaries:
+  exceedance_k: [1, 2, 3, 4, 5, 6]
+
+# Downstream stage parameters (PLACEHOLDERS, to be calibrated)
+downstream:
+  file: "config/downstream_params.yml"
+
+results:
+  figures: "results/figures"
+  tables: "results/tables"
