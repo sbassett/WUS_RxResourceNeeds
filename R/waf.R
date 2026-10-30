@@ -52,3 +52,24 @@ read_waf_table <- function(path = "config/waf_fbfm40.csv") {
 midflame_wind <- function(vs_10m, waf, u10_to_u20ft = 1.15, afternoon_factor = 1) {
   vs_10m * afternoon_factor / u10_to_u20ft * waf
 }
+
+#' Mid-flame wind (m/s), Swain et al. 2023: 10 m daily mean x 1.5 x 0.4
+midflame_swain <- function(vs_10m, afternoon_factor = 1.5, midflame_factor = 0.4) {
+  vs_10m * afternoon_factor * midflame_factor
+}
+
+#' Mid-flame wind using the method in the `wind` config section
+#'
+#' method "swain" (default) ignores the WAF; "andrews" uses it. Under
+#' "swain", wind is defined for every pixel, including non-burnable ones
+#' (those have zero treatable weight in the rollup).
+midflame_from_config <- function(vs_10m, waf, wind_cfg) {
+  m <- if (is.null(wind_cfg$method)) "swain" else wind_cfg$method
+  af <- if (is.null(wind_cfg$afternoon_factor)) 1 else wind_cfg$afternoon_factor
+  switch(m,
+         swain = midflame_swain(vs_10m, af,
+                                if (is.null(wind_cfg$swain_midflame_factor)) 0.4
+                                else wind_cfg$swain_midflame_factor),
+         andrews = midflame_wind(vs_10m, waf, wind_cfg$u10_to_u20ft, af),
+         stop("wind$method must be 'swain' or 'andrews'"))
+}

@@ -27,6 +27,8 @@ list(
   tar_target(cfg_gridmet, cfg$gridmet),
   tar_target(cfg_nfdrs, cfg$nfdrs),
   tar_target(cfg_wind, cfg$wind),
+  # only the WAF-grid parameters, so wind-method changes skip the 30 m step
+  tar_target(cfg_waf, cfg$wind[c("sheltered_min_f", "sheltered_min_ch_ft")]),
   tar_target(cfg_thresholds, cfg$thresholds),
   tar_target(cfg_landfire, cfg$landfire),
   tar_target(cfg_target_area, cfg$target_area),
@@ -103,7 +105,7 @@ list(
              { force(treatable_bps_file); force(treatable_evt_file)
                build_landfire_derived(fuels_vrt, evt_vrt, bps_vrt, evt_attr, bps_attr,
                                       fuels_bands, gm_template_file, projects,
-                                      cfg_target_area, waf_table, cfg_wind) }),
+                                      cfg_target_area, waf_table, cfg_waf) }),
   tar_target(treatable_frac_file, lf_derived$treatable_frac, format = "file"),
   tar_target(waf_file, lf_derived$waf, format = "file"),
   tar_target(project_stats, utils::read.csv(lf_derived$project_stats)),

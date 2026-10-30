@@ -48,8 +48,17 @@ test_that("classify_rx_year writes INT1U raster with NA", {
   terra::values(w) <- c(0.3, NA); names(w) <- "waf"
   wf <- file.path(d, "waf.tif"); terra::writeRaster(w, wf)
   thr <- load_thresholds(root_file("config/burn_thresholds.yml"), "forest")
-  f <- classify_rx_year(2021, gm, nf, wf, thr, list(u10_to_u20ft = 1.15), d)
+  # Andrews: cell 2 has no WAF (non-burnable) -> NA
+  f <- classify_rx_year(2021, gm, nf, wf, thr,
+                        list(method = "andrews", u10_to_u20ft = 1.15), d)
   v <- terra::values(terra::rast(f))
   expect_equal(unname(v[1, ]), c(1, 1))   # cell 1 in Rx both days
-  expect_true(all(is.na(v[2, ])))         # cell 2 has no WAF (non-burnable)
+  expect_true(all(is.na(v[2, ])))
+  # Swain: vs 5 x 1.5 x 0.4 = 3 m/s, no WAF needed; cell 2 day 2 too hot
+  f <- classify_rx_year(2021, gm, nf, wf, thr,
+                        list(method = "swain", afternoon_factor = 1.5,
+                             swain_midflame_factor = 0.4), d)
+  v <- terra::values(terra::rast(f))
+  expect_equal(unname(v[1, ]), c(1, 1))
+  expect_equal(unname(v[2, ]), c(1, 0))
 })

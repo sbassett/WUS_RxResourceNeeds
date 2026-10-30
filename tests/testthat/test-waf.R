@@ -37,3 +37,17 @@ test_that("mid-flame wind", {
   expect_equal(midflame_wind(11.5, 0.4), 4)
   expect_equal(midflame_wind(11.5, 0.4, afternoon_factor = 1.5), 6)
 })
+
+test_that("Swain mid-flame wind and method switch", {
+  expect_equal(midflame_swain(10), 10 * 1.5 * 0.4)
+  vs <- c(5, 5); waf <- c(0.3, NA)
+  sw <- midflame_from_config(vs, waf, list(method = "swain", afternoon_factor = 1.5,
+                                            swain_midflame_factor = 0.4))
+  expect_equal(sw, c(3, 3))                       # WAF ignored, no NA
+  an <- midflame_from_config(vs, waf, list(method = "andrews", afternoon_factor = 1.5,
+                                            u10_to_u20ft = 1.15))
+  expect_equal(an[1], 5 * 1.5 / 1.15 * 0.3); expect_true(is.na(an[2]))
+  expect_error(midflame_from_config(vs, waf, list(method = "x")), "swain")
+  cfg <- read_pipeline_config(root_file("config/pipeline.yml"))
+  expect_equal(cfg$wind$method, "swain")
+})

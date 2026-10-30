@@ -46,9 +46,16 @@ nfdrs:
 
 # Wind
 wind:
-  # gridMET vs is a daily mean; Swain et al. 2023 (Methods) scale it by 1.5 to
-  # represent afternoon wind. Set to 1 to use the daily mean as-is.
+  # Mid-flame wind method:
+  #   "swain"   (default) Swain et al. 2023 Methods: daily-mean 10 m wind
+  #             x afternoon_factor (1.5) x swain_midflame_factor (0.4).
+  #   "andrews" Andrews (2012) fuel-based WAF from modal LANDFIRE FBFM40:
+  #             10 m wind x afternoon_factor / u10_to_u20ft x WAF.
+  method: "swain"
+  # gridMET vs is a daily mean; Swain scales it by 1.5 for afternoon wind.
   afternoon_factor: 1.5
+  swain_midflame_factor: 0.4  # Swain: 10 m -> mid-flame surface friction factor
+  # Used only when method = "andrews" (the WAF grid is still built either way):
   u10_to_u20ft: 1.15         # U20ft = U10m / 1.15 (Lawson & Armitage 2008)
   waf_table: "config/waf_fbfm40.csv"
   sheltered_min_f: 0.05      # crown fill portion above which sheltered WAF is used

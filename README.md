@@ -7,9 +7,9 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 
 **Review modeling decisions**
 - [x] Replace EVT name patterns with reviewed BPS/EVT crosswalks (`config/treatable_bps.csv`, `config/treatable_evt_phys.csv`).
-- [ ] Spot-check the 13 treatable BPS classes and the excluded forest classes in `config/treatable_bps.csv` (e.g. aspen and mesic mixed conifer, whose FRG varies by map zone).
+- [x] Spot-check the 13 treatable BPS classes and the excluded forest classes in `config/treatable_bps.csv` (e.g. aspen and mesic mixed conifer, whose FRG varies by map zone).
 - [ ] Confirm Swain ST1 Forest Plans is the right threshold set (`thresholds.plan_set` in `config/pipeline.yml`).
-- [ ] Decide whether to keep Swain's ×1.5 afternoon wind factor on top of Andrews WAFs (`wind.afternoon_factor`); wind currently never binds.
+- [x] Mid-flame wind follows Swain et al. 2023 exactly (daily-mean 10 m wind × 1.5 × 0.4; `wind.method: swain`). Andrews WAFs remain available as `wind.method: andrews`.
 - [ ] Confirm `rx_share ≥ 0.5` as the unit burn-day cutoff (`rollup.burn_day_share`).
 
 **Add missing data layers**
@@ -63,7 +63,7 @@ Requires R ≥ 4.3 (built with R 4.6.1 on Windows) and internet access for first
 1. Restore packages: `renv::restore()`
 2. LANDFIRE's LFPS v2 API requires an email. Add it to your user `.Renviron`: `LANDFIRE_EMAIL=you@example.org`
 3. Build: `targets::tar_make()` (inspect with `targets::tar_visnetwork()`, read results with `targets::tar_read(rx_target)`)
-4. Test: `Rscript tests/run_tests.R` (203 expectations)
+4. Test: `Rscript tests/run_tests.R` (211 expectations)
 
 All settings live in `config/pipeline.yml`. The config is split into per-section targets, so changing `years` doesn't redo the 30 m LANDFIRE processing. First-time downloads can be run in parallel with `Rscript tools/prefetch_landfire.R fuels 1 2` (and `fuels 2 2`, `evt`, `bps`) and `Rscript tools/prefetch_gridmet.R 1979 2025` after `bbox`/`lf_tiles` are built.
 
@@ -75,8 +75,8 @@ A full rebuild with downloads cached takes about 49 minutes and uses about 7 GB 
 graph TD
   A[Swain ST1 → config/burn_thresholds.yml] --> G
   B[gridMET daily] --> C[NFDRS FM1/FM10]
-  B --> F[Mid-flame wind]
-  D[LANDFIRE FBFM40/CC/CH/CBH] --> E[WAF per gridMET cell]
+  B --> F[Mid-flame wind: Swain 1.5 × 0.4]
+  D[LANDFIRE FBFM40/CC/CH/CBH] --> E[WAF per gridMET cell, optional andrews method]
   E --> F
   C --> G[Daily in-Rx classification per pixel]
   F --> G
@@ -101,7 +101,7 @@ From Swain et al. 2023, Supplementary Table ST1. `R/extract_swain_st1.R` extract
 |---|---|---|
 | Air temperature (°C) | 7.2–28.9 | gridMET daily max `tmmx` |
 | Relative humidity (%) | 15–60 | gridMET daily min `rmin` |
-| Mid-flame wind (m/s) | 0–4.5 | gridMET `vs` × 1.5 (afternoon) ÷ 1.15 (10 m→20 ft) × Andrews WAF |
+| Mid-flame wind (m/s) | 0–4.5 | gridMET `vs` × 1.5 (afternoon) × 0.4 (10 m → mid-flame), as in Swain |
 | 1-hr FM (%) | 4–12 | NFDRS, computed |
 | 10-hr FM (%) | 6–14 | NFDRS, computed |
 | 100-hr FM (%) | 7.5–15 | gridMET `fm100` |
@@ -114,6 +114,8 @@ From Swain et al. 2023, Supplementary Table ST1. `R/extract_swain_st1.R` extract
 - **Fuel-level adjustment:** temperature and RH are adjusted for state of weather (+25/19/12/5 °F; RH ×0.75/0.83/0.92/1.0). Sky condition is estimated from gridMET srad ÷ FAO-56 clear-sky radiation (`nfdrs.cloud_adjust: srad`; set it to `none` to disable).
 
 ### Mid-flame wind
+- **Default (`wind.method: swain`):** exactly Swain et al. 2023 Methods. gridMET's daily-mean 10 m wind is scaled by 1.5 for afternoon conditions and by 0.4 for surface friction to get mid-flame wind (`afternoon_factor`, `swain_midflame_factor`). It doesn't depend on fuels, so every pixel has a value.
+- **Alternative (`wind.method: andrews`):** 10 m wind × 1.5 ÷ 1.15 (10 m → 20 ft) × a fuel-based WAF. The WAF grid below is still built and saved in both modes, and `lf_derived` depends only on the sheltered-WAF thresholds, so switching methods doesn't rerun the 30 m step.
 - **WAF equations** (`R/waf.R`, Andrews 2012 as implemented in BehavePlus):
   - Unsheltered: 1.83 / ln((20 + 0.36δ)/(0.13δ)), where δ is the Scott & Burgan fuel bed depth (`config/waf_fbfm40.csv`).
   - Sheltered: 0.555 / (√(fH)·ln((20 + 0.36H)/(0.13H))), where f = crown ratio × canopy cover / 3.
@@ -178,12 +180,12 @@ The full report is in [`docs/report.md`](docs/report.md).
 | Units with daily rx_share (overlap treatable gridMET cells) | 1,321 |
 | Units with treatable area inside their boundary | 1,158 |
 | Treatable (target) area | 5.70 M ac |
-| Annual Rx need (AFN) | ~443,000 ac/yr; median MFRI_eff 13 yr |
-| Mean annual burn days per unit | median 25.5 (IQR 19–32), interannual CV median 0.43 |
-| Trend in mean annual burn days | +2.4 days/decade (p = 0.006) |
-| Median pairwise burn-day Jaccard | 0.13; south and north NM are largely out of sync |
+| Annual Rx need (AFN) | ~443,000 ac/yr; median MFRI_eff 13 yr; median BFN 7.7 ac/burn day |
+| Mean annual burn days per unit | median 24 (IQR 18–30.5), interannual CV median 0.44 |
+| Trend in mean annual burn days | +2.1 days/decade (p = 0.01) |
+| Median pairwise burn-day Jaccard | 0.12; south and north NM are largely out of sync |
 
-Fuel moisture binds hardest: in forested pixels, 10-hr FM is in prescription on 33% of days and 1-hr FM on 48%. The 4.5 m/s mid-flame wind cap never binds once Andrews WAFs are applied.
+Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37%, 1-hr FM 54%, 100-hr FM 57%, temperature 76%, 1000-hr FM 77%, RH 79%, mid-flame wind 95%. All thresholds together pass on about 10% of days, so fuel moisture limits burning the most.
 
 ## Outputs
 
@@ -205,7 +207,7 @@ Fuel moisture binds hardest: in forested pixels, 10-hr FM is in prescription on 
 
 | Stage | Status | Notes |
 |---|---|---|
-| Scaffolding (renv, targets, testthat) | Implemented | 203 test expectations |
+| Scaffolding (renv, targets, testthat) | Implemented | 211 test expectations |
 | Swain ST1 thresholds → config | Implemented | verified against extracted ST1 |
 | Study area + subfiresheds | Implemented | |
 | gridMET sourcing | Implemented | OPeNDAP via ncdf4 (climateR not needed) |
@@ -225,7 +227,7 @@ Fuel moisture binds hardest: in forested pixels, 10-hr FM is in prescription on 
 - No bias correction of gridMET against RAWS.
 - The ignition component threshold isn't applied.
 - The NFDRS state-of-weather adjustment is an approximation from daily srad; the breakpoints are in `nfdrs.sow_breaks`.
-- Mid-flame wind uses Andrews WAFs plus Swain's ×1.5 afternoon factor. Swain instead used a flat 0.4 reduction, so wind is effectively non-binding here.
+- Mid-flame wind uses Swain's flat 1.5 × 0.4 scaling, so it doesn't account for canopy sheltering. Fuel-based WAFs are available with `wind.method: andrews`.
 - BPS fire regime group can vary by map zone for the same BPS_CODE. The crosswalk makes one decision per BPS_CODE; aspen (I-C/IV-B) and mesic mixed conifer (I-C/III-A) are included everywhere.
 - Wilderness exclusion isn't sourced. WUI isn't sourced either (the pseudocode cites wildfirerisk.org), so the WUI share is a placeholder.
 - The minimum-patch filter uses GDAL sieve (see run notes). Patches crossing LANDFIRE tile seams are handled on the mosaic.

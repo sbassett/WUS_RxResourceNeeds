@@ -47,8 +47,7 @@ classify_rx_year <- function(year, gm_files, nfdrs_files, waf_file, thresholds,
   if ("fm1" %in% need) L$fm1 <- v(nfdrs_files[["fm1"]])
   if ("fm10" %in% need) L$fm10 <- v(nfdrs_files[["fm10"]])
   if ("midflame" %in% need) {
-    af <- if (is.null(wind_cfg$afternoon_factor)) 1 else wind_cfg$afternoon_factor
-    L$midflame <- midflame_wind(v(gm_files$vs), waf, wind_cfg$u10_to_u20ft, af)
+    L$midflame <- midflame_from_config(v(gm_files$vs), waf, wind_cfg)
   }
   cls <- classify_rx(L, thresholds)
   r <- terra::rast(ref)
