@@ -3,17 +3,46 @@
 
 pixel_acres <- function(res_m = 30) res_m^2 / 4046.8564224
 
-#' Treatable EVT codes from name patterns (include and not exclude)
-treatable_evt_codes <- function(evt_attr, classes_file) {
-  rules <- utils::read.csv(classes_file, stringsAsFactors = FALSE)
-  inc <- rules$pattern[rules$rule == "include"]
-  exc <- rules$pattern[rules$rule == "exclude"]
-  nm <- evt_attr$EVT_NAME
-  hit <- function(p) Reduce(`|`, lapply(p, function(z) grepl(z, nm, fixed = TRUE)),
-                            init = rep(FALSE, length(nm)))
-  keep <- hit(inc) & !hit(exc)
-  data.frame(code = evt_attr$Value[keep], EVT_NAME = nm[keep],
-             stringsAsFactors = FALSE)
+#' Read a treatable crosswalk and check it covers every key in the data
+#'
+#' Stops (rather than silently dropping classes) if the data contain keys
+#' with no row, or rows without a TRUE/FALSE decision.
+read_crosswalk <- function(path, key, data_keys) {
+  x <- utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
+  if (!all(c(key, "treatable") %in% names(x))) {
+    stop(path, " must have columns `", key, "` and `treatable`")
+  }
+  x$treatable <- as.logical(x$treatable)
+  if (anyNA(x$treatable)) {
+    stop(path, ": `treatable` must be TRUE or FALSE for every row")
+  }
+  if (anyDuplicated(x[[key]])) stop(path, ": duplicate ", key)
+  miss <- setdiff(unique(data_keys), x[[key]])
+  if (length(miss)) {
+    stop(path, " has no row for ", length(miss), " ", key, " value(s) present in ",
+         "the data: ", paste(utils::head(miss, 10), collapse = ", "),
+         ". Run `Rscript tools/build_treatable_crosswalk.R` and review the new rows.")
+  }
+  x
+}
+
+#' Raster values treated as treatable from the BPS and EVT crosswalks
+#'
+#' BPS rows are keyed on BPS_CODE (consistent across map zones); a raster
+#' Value is treatable when its BPS_CODE is. EVT rows are keyed on EVT_PHYS.
+#' Returns tables of treatable raster Values for each layer.
+treatable_codes <- function(bps_attr, evt_attr, bps_file, evt_file) {
+  b <- bps_attr[bps_attr$BPS_CODE > 0, ]
+  bx <- read_crosswalk(bps_file, "BPS_CODE", b$BPS_CODE)
+  bok <- b[b$BPS_CODE %in% bx$BPS_CODE[bx$treatable], ]
+  ex <- read_crosswalk(evt_file, "EVT_PHYS", evt_attr$EVT_PHYS)
+  eok <- evt_attr[evt_attr$EVT_PHYS %in% ex$EVT_PHYS[ex$treatable], ]
+  list(
+    bps = data.frame(code = bok$Value, BPS_CODE = bok$BPS_CODE,
+                     BPS_NAME = bok$BPS_NAME, stringsAsFactors = FALSE),
+    evt = data.frame(code = eok$Value, EVT_PHYS = eok$EVT_PHYS,
+                     EVT_NAME = eok$EVT_NAME, stringsAsFactors = FALSE)
+  )
 }
 
 #' Pure-matrix helpers (testable without rasters) -------------------------
@@ -89,9 +118,12 @@ build_landfire_derived <- function(fuels_vrt, evt_vrt, bps_vrt, evt_attr, bps_at
   bps <- align(bps, "bps")
 
   # --- treatable mask ---------------------------------------------------
-  codes <- treatable_evt_codes(evt_attr, ta_cfg$classes_file)
-  utils::write.csv(codes, of("treatable_evt_codes.csv"), row.names = FALSE)
-  treat <- terra::classify(evt, cbind(codes$code, 1L), others = 0L)
+  # historical dry forest (BPS) AND currently burnable vegetation (EVT)
+  codes <- treatable_codes(bps_attr, evt_attr, ta_cfg$bps_file, ta_cfg$evt_file)
+  utils::write.csv(codes$bps, of("treatable_bps_codes.csv"), row.names = FALSE)
+  utils::write.csv(codes$evt, of("treatable_evt_codes.csv"), row.names = FALSE)
+  treat <- terra::classify(bps, cbind(codes$bps$code, 1L), others = 0L) *
+    terra::classify(evt, cbind(codes$evt$code, 1L), others = 0L)
   if (isTRUE(ta_cfg$slope$enabled)) {
     thr <- atan(ta_cfg$slope$max_pct / 100) * 180 / pi
     treat <- terra::ifel(fuels[["slope"]] > thr, 0L, treat)
@@ -203,5 +235,6 @@ build_landfire_derived <- function(fuels_vrt, evt_vrt, bps_vrt, evt_attr, bps_at
 
   list(treatable_30m = treat_f, treatable_frac = frac_f, waf = waf_f,
        fuel_table = of("fuel_by_gridmet_cell.csv"), project_stats = stats_f,
-       treatable_codes = of("treatable_evt_codes.csv"))
+       treatable_bps_codes = of("treatable_bps_codes.csv"),
+       treatable_evt_codes = of("treatable_evt_codes.csv"))
 }

@@ -6,7 +6,8 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 ## To do
 
 **Review modeling decisions**
-- [ ] Check that `data/processed/landfire/treatable_evt_codes.csv` captures the right dry-forest EVT classes (patterns in `config/treatable_classes.csv`).
+- [x] Replace EVT name patterns with reviewed BPS/EVT crosswalks (`config/treatable_bps.csv`, `config/treatable_evt_phys.csv`).
+- [ ] Spot-check the 13 treatable BPS classes and the excluded forest classes in `config/treatable_bps.csv` (e.g. aspen and mesic mixed conifer, whose FRG varies by map zone).
 - [ ] Confirm Swain ST1 Forest Plans is the right threshold set (`thresholds.plan_set` in `config/pipeline.yml`).
 - [ ] Decide whether to keep Swain's ×1.5 afternoon wind factor on top of Andrews WAFs (`wind.afternoon_factor`); wind currently never binds.
 - [ ] Confirm `rx_share ≥ 0.5` as the unit burn-day cutoff (`rollup.burn_day_share`).
@@ -62,7 +63,7 @@ Requires R ≥ 4.3 (built with R 4.6.1 on Windows) and internet access for first
 1. Restore packages: `renv::restore()`
 2. LANDFIRE's LFPS v2 API requires an email. Add it to your user `.Renviron`: `LANDFIRE_EMAIL=you@example.org`
 3. Build: `targets::tar_make()` (inspect with `targets::tar_visnetwork()`, read results with `targets::tar_read(rx_target)`)
-4. Test: `Rscript tests/run_tests.R` (195 expectations)
+4. Test: `Rscript tests/run_tests.R` (203 expectations)
 
 All settings live in `config/pipeline.yml`. The config is split into per-section targets, so changing `years` doesn't redo the 30 m LANDFIRE processing. First-time downloads can be run in parallel with `Rscript tools/prefetch_landfire.R fuels 1 2` (and `fuels 2 2`, `evt`, `bps`) and `Rscript tools/prefetch_gridmet.R 1979 2025` after `bbox`/`lf_tiles` are built.
 
@@ -121,9 +122,15 @@ From Swain et al. 2023, Supplementary Table ST1. `R/extract_swain_st1.R` extract
 - **Result:** WAF ranges 0.10–0.55 (median 0.35). 19% of cells are sheltered.
 
 ### Target (treatable) area
-The pseudocode's "treatable" flag (`R/target_area.R`):
-- **Included:** LANDFIRE 2022 EVT names matching dry-forest patterns in `config/treatable_classes.csv`: Ponderosa Pine, Dry-Mesic Montane Mixed Conifer, Madrean (Lower Montane) Pine-Oak.
-- **Excluded:** developed, spruce-fir/subalpine, pinyon/juniper, riparian/wetland and agriculture.
+A 30 m pixel is treatable when it is **historical dry forest** (BPS) **and currently burnable** (EVT). Both come from reviewed, code-level crosswalks, not name matching (`R/target_area.R`):
+- **`config/treatable_bps.csv`:** one row per LANDFIRE BPS_CODE, with a `treatable` TRUE/FALSE flag, a reason and the source fields (GROUPVEG, FRG_NEW, FRI_ALLFIR). The default rule is forest/woodland BPS in Fire Regime Group I (≤ 35-yr return), excluding pinyon-juniper, juniper and shrubland BPS. That gives 13 classes in NM:
+  - ponderosa pine woodland and savanna (including the "-South" variants)
+  - dry-mesic and mesic montane mixed conifer
+  - Madrean lower montane pine-oak, upper montane conifer-oak and Encinal
+  - Rocky Mountain aspen and aspen-mixed conifer
+- **`config/treatable_evt_phys.csv`:** one row per EVT_PHYS. Current conifer, hardwood, shrub, grass and exotic vegetation are treatable, so fire-excluded and post-fire conversions within dry-forest BPS count. Developed, agriculture, water, snow/ice, quarries, sparse and riparian are excluded.
+- **No silent drops:** the pipeline stops if the data contain a BPS_CODE or EVT_PHYS with no row. `Rscript tools/build_treatable_crosswalk.R` appends new codes with the default rule and `review = "new"`, and leaves existing (reviewed) rows unchanged.
+- **Outputs:** the raster values actually used are written to `data/processed/landfire/treatable_bps_codes.csv` and `treatable_evt_codes.csv`.
 - **Toggles:**
 
 | Toggle | Default |
@@ -168,13 +175,13 @@ The full report is in [`docs/report.md`](docs/report.md).
 | Quantity | Value |
 |---|---|
 | Subfiresheds analysed | 3,157 |
-| Units with daily rx_share (overlap treatable gridMET cells) | 996 |
-| Units with treatable area inside their boundary | 828 |
-| Treatable (target) area | 3.19 M ac |
-| Annual Rx need (AFN) | ~190,000 ac/yr; median MFRI_eff 20 yr |
-| Mean annual burn days per unit | median 28 (IQR 22–35), interannual CV median 0.42 |
-| Trend in mean annual burn days | +2.5 days/decade (p = 0.007) |
-| Median pairwise burn-day Jaccard | 0.14; south and north NM are largely out of sync |
+| Units with daily rx_share (overlap treatable gridMET cells) | 1,321 |
+| Units with treatable area inside their boundary | 1,158 |
+| Treatable (target) area | 5.70 M ac |
+| Annual Rx need (AFN) | ~443,000 ac/yr; median MFRI_eff 13 yr |
+| Mean annual burn days per unit | median 25.5 (IQR 19–32), interannual CV median 0.43 |
+| Trend in mean annual burn days | +2.4 days/decade (p = 0.006) |
+| Median pairwise burn-day Jaccard | 0.13; south and north NM are largely out of sync |
 
 Fuel moisture binds hardest: in forested pixels, 10-hr FM is in prescription on 33% of days and 1-hr FM on 48%. The 4.5 m/s mid-flame wind cap never binds once Andrews WAFs are applied.
 
@@ -187,7 +194,7 @@ Fuel moisture binds hardest: in forested pixels, 10-hr FM is in prescription on 
 | NFDRS FM | `data/processed/nfdrs/fm1_{year}.tif`, `fm10_{year}.tif` | daily % |
 | Daily in-Rx | `data/processed/burn_days/inrx_{year}.tif` | INT1U: 1 in Rx, 0 out, 255 = NA |
 | Fuels / WAF | `data/processed/landfire/waf_gridmet.tif`, `fuel_by_gridmet_cell.csv` | waf, modal fbfm40, canopy means, sheltered |
-| Target area | `data/processed/landfire/treatable_30m.tif`, `treatable_frac_gridmet.tif`, `project_landfire_stats.csv`, `treatable_evt_codes.csv` | 30 m mask; fraction per cell; per-unit treatable_ac, afn_ac, heavy_fuel_share, mean_slope_deg |
+| Target area | `data/processed/landfire/treatable_30m.tif`, `treatable_frac_gridmet.tif`, `project_landfire_stats.csv`, `treatable_bps_codes.csv`, `treatable_evt_codes.csv` | 30 m mask; fraction per cell; per-unit treatable_ac, afn_ac, heavy_fuel_share, mean_slope_deg |
 | Daily rollup | `data/processed/rx_share_daily.parquet` | project_id, date, rx_share |
 | Synchrony | `data/processed/synchrony_pairs.parquet` | project_a, project_b, jaccard, weekly_cor |
 | Tables | `results/tables/` | annual_burn_days, burn_day_variability, weekly_exceedance, rx_target_afn_bfn, thresholds_applied, and `*_STUB.csv` downstream tables |
@@ -198,14 +205,14 @@ Fuel moisture binds hardest: in forested pixels, 10-hr FM is in prescription on 
 
 | Stage | Status | Notes |
 |---|---|---|
-| Scaffolding (renv, targets, testthat) | Implemented | 195 test expectations |
+| Scaffolding (renv, targets, testthat) | Implemented | 203 test expectations |
 | Swain ST1 thresholds → config | Implemented | verified against extracted ST1 |
 | Study area + subfiresheds | Implemented | |
 | gridMET sourcing | Implemented | OPeNDAP via ncdf4 (climateR not needed) |
 | NFDRS 1-hr / 10-hr FM | Implemented | srad-based state-of-weather approximation |
 | LANDFIRE sourcing + WAF grid | Implemented | LF2022 fuels/EVT, LF2020 BPS/SlpD |
 | Daily in-Rx classification | Implemented | |
-| Target-area mask | Implemented | wilderness toggle needs a layer |
+| Target-area mask | Implemented | BPS × EVT crosswalks; wilderness toggle needs a layer |
 | Unit daily rollup | Implemented | |
 | Predictability and synchrony | Implemented | |
 | Full 1979–2025 run | Done | see docs/run_notes.md |
@@ -219,7 +226,7 @@ Fuel moisture binds hardest: in forested pixels, 10-hr FM is in prescription on 
 - The ignition component threshold isn't applied.
 - The NFDRS state-of-weather adjustment is an approximation from daily srad; the breakpoints are in `nfdrs.sow_breaks`.
 - Mid-flame wind uses Andrews WAFs plus Swain's ×1.5 afternoon factor. Swain instead used a flat 0.4 reduction, so wind is effectively non-binding here.
-- Treatable-class patterns are name-based. Review `data/processed/landfire/treatable_evt_codes.csv`.
+- BPS fire regime group can vary by map zone for the same BPS_CODE. The crosswalk makes one decision per BPS_CODE; aspen (I-C/IV-B) and mesic mixed conifer (I-C/III-A) are included everywhere.
 - Wilderness exclusion isn't sourced. WUI isn't sourced either (the pseudocode cites wildfirerisk.org), so the WUI share is a placeholder.
 - The minimum-patch filter uses GDAL sieve (see run notes). Patches crossing LANDFIRE tile seams are handled on the mosaic.
 - All downstream parameters are placeholders. State need figures show only that the pipeline works.

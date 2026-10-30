@@ -1,13 +1,44 @@
-test_that("treatable EVT codes follow include/exclude patterns", {
-  evt <- data.frame(Value = 1:6, EVT_NAME = c(
-    "Southern Rocky Mountain Ponderosa Pine Woodland",
-    "Southern Rocky Mountain Dry-Mesic Montane Mixed Conifer Forest and Woodland",
-    "Southern Rocky Mountain Pinyon-Juniper Woodland",
-    "Rocky Mountain Subalpine Dry-Mesic Spruce-Fir Forest and Woodland",
-    "Developed-Upland Evergreen Forest",
-    "Madrean Pine-Oak Forest and Woodland"), stringsAsFactors = FALSE)
-  codes <- treatable_evt_codes(evt, root_file("config/treatable_classes.csv"))
-  expect_equal(codes$code, c(1L, 2L, 6L))
+write_csv_tmp <- function(df) {
+  f <- tempfile(fileext = ".csv"); utils::write.csv(df, f, row.names = FALSE); f
+}
+
+test_that("treatable codes come from BPS and EVT crosswalks", {
+  # two raster Values share BPS_CODE 10540 (different map zones)
+  bps <- data.frame(Value = c(1, 2, 3, 4), BPS_CODE = c(10540, 10540, 10590, 11),
+                    BPS_NAME = c("PIPO", "PIPO", "PJ", "Water"), stringsAsFactors = FALSE)
+  evt <- data.frame(Value = c(10, 20, 30), EVT_PHYS = c("Conifer", "Shrubland", "Developed"),
+                    EVT_NAME = c("a", "b", "c"), stringsAsFactors = FALSE)
+  bf <- write_csv_tmp(data.frame(BPS_CODE = c(10540, 10590, 11),
+                                 treatable = c(TRUE, FALSE, FALSE)))
+  ef <- write_csv_tmp(data.frame(EVT_PHYS = c("Conifer", "Shrubland", "Developed"),
+                                 treatable = c(TRUE, TRUE, FALSE)))
+  cc <- treatable_codes(bps, evt, bf, ef)
+  expect_equal(cc$bps$code, c(1, 2))
+  expect_equal(cc$evt$code, c(10, 20))      # current shrub stays treatable
+})
+
+test_that("crosswalks fail loudly on missing or undecided codes", {
+  bf <- write_csv_tmp(data.frame(BPS_CODE = 10540, treatable = TRUE))
+  expect_error(read_crosswalk(bf, "BPS_CODE", c(10540, 10590)), "no row for 1")
+  bf2 <- write_csv_tmp(data.frame(BPS_CODE = 10540, treatable = NA))
+  expect_error(read_crosswalk(bf2, "BPS_CODE", 10540), "TRUE or FALSE")
+  bf3 <- write_csv_tmp(data.frame(BPS_CODE = c(1, 1), treatable = TRUE))
+  expect_error(read_crosswalk(bf3, "BPS_CODE", 1), "duplicate")
+})
+
+test_that("shipped crosswalks encode the agreed decisions", {
+  bx <- read_crosswalk(root_file("config/treatable_bps.csv"), "BPS_CODE", integer())
+  yes <- c(10540, 10541, 11170, 11171,   # ponderosa woodland / savanna
+           10510, 10520,                 # dry-mesic and mesic mixed conifer
+           10240, 10260, 10230,          # Madrean pine-oak, conifer-oak, Encinal
+           10110, 10610, 10611, 10612)   # aspen, aspen-mixed conifer
+  no <- c(10590, 11160, 11190, 10550, 10560)   # PJ, juniper, spruce-fir
+  expect_true(all(bx$treatable[match(yes, bx$BPS_CODE)]))
+  expect_false(any(bx$treatable[match(no, bx$BPS_CODE)]))
+  ex <- read_crosswalk(root_file("config/treatable_evt_phys.csv"), "EVT_PHYS", character())
+  t <- stats::setNames(ex$treatable, ex$EVT_PHYS)
+  expect_true(all(t[c("Conifer", "Shrubland", "Grassland")]))
+  expect_false(any(t[c("Developed", "Agricultural", "Riparian", "Open Water")]))
 })
 
 test_that("slope and wilderness filters", {

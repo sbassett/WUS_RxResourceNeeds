@@ -75,7 +75,11 @@ landfire:
 
 # Target (treatable) area
 target_area:
-  classes_file: "config/treatable_classes.csv"   # EVT name patterns -> treatable
+  # Treatable = historical dry forest (BPS) AND currently burnable (EVT).
+  # Both are reviewed code-level crosswalks; build/update with
+  # Rscript tools/build_treatable_crosswalk.R
+  bps_file: "config/treatable_bps.csv"           # one row per BPS_CODE
+  evt_file: "config/treatable_evt_phys.csv"      # one row per EVT_PHYS
   slope:
     enabled: true
     max_pct: 25              # NRCS 2010 soil-movement guidance
