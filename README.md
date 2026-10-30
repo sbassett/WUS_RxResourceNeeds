@@ -3,6 +3,34 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 
 > **Status (2026-10-29):** the Burn Day Model, target area, and annual Rx target (AFN/BFN) are implemented and have been run for New Mexico, 1979–2025. The unit size/complexity, firing method, line production, resource mix, and state rollup stages are **wired-in stubs with placeholder parameters**: they run end to end but their numbers are not estimates. See the [status table](#status). [`spatialanalysis_pseudocode.md`](spatialanalysis_pseudocode.md) is the statement of project intent.
 
+## To do
+
+**Review modeling decisions**
+- [ ] Check that `data/processed/landfire/treatable_evt_codes.csv` captures the right dry-forest EVT classes (patterns in `config/treatable_classes.csv`).
+- [ ] Confirm Swain ST1 Forest Plans is the right threshold set (`thresholds.plan_set` in `config/pipeline.yml`).
+- [ ] Decide whether to keep Swain's ×1.5 afternoon wind factor on top of Andrews WAFs (`wind.afternoon_factor`); wind currently never binds.
+- [ ] Confirm `rx_share ≥ 0.5` as the unit burn-day cutoff (`rollup.burn_day_share`).
+
+**Add missing data layers**
+- [ ] Wilderness boundaries, then enable `target_area.wilderness`.
+- [ ] WUI layer (wildfirerisk.org Community Wildfire Risk Reduction Zones) to replace the placeholder `wui_share`.
+
+**Calibrate downstream stages** (placeholders in `config/downstream_params.yml`)
+- [ ] Unit complexity model: terrain, fuel homogeneity, distance to road, adjacent fuels, WUI.
+- [ ] Unit size distribution from real treatable patches instead of an even spread across size bins.
+- [ ] Firing method rules and acres/day for hand, drone, and heli ignition.
+- [ ] Line production (chains/hr) under hot- and cool-side prescription conditions.
+- [ ] Resources per unit-day across firing, holding, and contingency.
+
+**Model improvements**
+- [ ] Ignition component threshold (needs the full NFDRS spread component).
+- [ ] Bias-correct gridMET against RAWS (Barros et al. 2021).
+- [ ] Better NFDRS state-of-weather adjustment than the srad approximation.
+
+**Open questions from the pseudocode**
+- [ ] Validate predicted burn windows against observed Rx burns (WildCAD, etc.).
+- [ ] Extend from the NM pilot to the western US.
+
 ## Goal and pilot scope
 
 For each Fireshed Registry unit, estimate how much prescribed (Rx) fire is needed, how many days per year are burnable, how large and complex the burn units are, how they would be ignited and held, and what people, quals, and equipment that requires. Unit needs roll up to the state by week and year, accounting for burn-window **synchrony** (whether places are burnable at the same time) and year-to-year variability.
