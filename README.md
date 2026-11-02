@@ -8,7 +8,7 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 **Review modeling decisions**
 - [x] Replace EVT name patterns with reviewed BPS/EVT crosswalks (`config/treatable_bps.csv`, `config/treatable_evt_phys.csv`).
 - [x] Spot-check the 13 treatable BPS classes and the excluded forest classes in `config/treatable_bps.csv` (e.g. aspen and mesic mixed conifer, whose FRG varies by map zone).
-- [ ] Confirm Swain ST1 Forest Plans is the right threshold set (`thresholds.plan_set` in `config/pipeline.yml`).
+- [x] Use Swain ST1 Forest Plans thresholds for now (`thresholds.plan_set: forest`). Possible later refinements: sensitivity runs with `all`/`nonforest`, vegetation-dependent thresholds (forest bounds on tree pixels, non-forest on current shrub/grass), or NM-only medians from Swain's burn-plan repository.
 - [x] Mid-flame wind follows Swain et al. 2023 exactly (daily-mean 10 m wind × 1.5 × 0.4; `wind.method: swain`). Andrews WAFs remain available as `wind.method: andrews`.
 - [x] Unit burn day = at least 441 treatable acres in prescription (one minimum-size burn unit; `rollup.burn_day_rule: acres`). The share rule remains available as `burn_day_rule: share`.
 
