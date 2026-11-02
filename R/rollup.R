@@ -34,17 +34,61 @@ weighted_share <- function(W, X) {
   out
 }
 
-#' Daily rx_share for one year: long data.frame(project_id, date, rx_share)
+km2_to_acres <- function(km2) km2 * 247.1053815
+
+#' Weighted in-Rx area (acres) given W [p, cell] in km2 and X [cell, day]
+weighted_acres <- function(W, X) {
+  loadNamespace("Matrix")
+  X0 <- X; X0[is.na(X0)] <- 0
+  km2_to_acres(as.matrix(W %*% X0))
+}
+
+#' Daily rollup for one year
+#'
+#' Long data.frame(project_id, date, rx_share, rx_acres). rx_acres is the
+#' treatable area in prescription that day (acres), using the same weights
+#' as rx_share (coverage x treatable fraction x cell area), so rx_share =
+#' rx_acres / treatable acres with valid data.
 rx_share_year <- function(inrx_file, W) {
   loadNamespace("Matrix")
   W <- W[Matrix::rowSums(W) > 0, , drop = FALSE]   # drop units with no target area
   r <- terra::rast(inrx_file)
   X <- terra::values(r)
   s <- weighted_share(W, X)
+  a <- weighted_acres(W, X)
+  a[is.na(s)] <- NA_real_
   dates <- terra::time(r)
   data.frame(project_id = rep(as.integer(rownames(W)), times = length(dates)),
              date = rep(dates, each = nrow(W)),
-             rx_share = as.vector(s))
+             rx_share = as.vector(s),
+             rx_acres = as.vector(a))
+}
+
+#' Burn-day rule from the `rollup` config section
+#'
+#' rule "acres" (default): burn day when rx_acres >= burn_day_acres (enough
+#' in-Rx treatable area to host one minimum-size burn unit).
+#' rule "share": burn day when rx_share >= burn_day_share.
+#' A bare number is treated as a share cutoff (used in tests).
+burn_day_rule <- function(rollup_cfg) {
+  if (is.numeric(rollup_cfg)) return(list(rule = "share", share = rollup_cfg))
+  r <- if (is.null(rollup_cfg$burn_day_rule)) "acres" else rollup_cfg$burn_day_rule
+  list(rule = r, acres = rollup_cfg$burn_day_acres, share = rollup_cfg$burn_day_share)
+}
+
+#' 0/1 burn-day flag for each row of the daily table (NA rx_share -> NA)
+flag_burn_days <- function(daily, rule) {
+  rule <- burn_day_rule(rule)
+  out <- switch(rule$rule,
+    acres = {
+      if (!"rx_acres" %in% names(daily)) stop("daily table has no rx_acres column")
+      daily$rx_acres >= rule$acres - 1e-9
+    },
+    share = daily$rx_share >= rule$share - 1e-9,
+    stop("rollup$burn_day_rule must be 'acres' or 'share'"))
+  out <- as.integer(out)
+  out[is.na(daily$rx_share)] <- NA_integer_
+  out
 }
 
 #' Write the combined daily table to parquet
@@ -58,14 +102,14 @@ write_rx_share <- function(tables, out) {
 
 #' Derived counts from the daily table
 #'
-#' burn_day = rx_share >= threshold. pixel_mean_days = sum of rx_share, i.e.
-#' the treatable-area-weighted mean count of in-Rx days across pixels.
-burn_day_counts <- function(daily, threshold = 0.5, n_weeks = 52L) {
+#' burn_day from flag_burn_days(rule). pixel_mean_days = sum of rx_share,
+#' i.e. the treatable-area-weighted mean count of in-Rx days across pixels.
+burn_day_counts <- function(daily, rule = 0.5, n_weeks = 52L) {
+  daily$burn_day <- flag_burn_days(daily, rule)
   d <- dplyr::filter(daily, !is.na(.data$rx_share))
   d <- dplyr::mutate(d,
                      year = as.integer(format(.data$date, "%Y")),
-                     week = doy_week(.data$date, n_weeks),
-                     burn_day = as.integer(.data$rx_share >= threshold))
+                     week = doy_week(.data$date, n_weeks))
   ann <- dplyr::summarise(dplyr::group_by(d, .data$project_id, .data$year),
                           burn_days = sum(.data$burn_day),
                           pixel_mean_days = sum(.data$rx_share),

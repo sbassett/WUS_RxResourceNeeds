@@ -14,7 +14,16 @@ read_pipeline_config <- function(path = "config/pipeline.yml") {
   }
   if (cfg$years$start > cfg$years$end) stop("years$start must be <= years$end")
   if (cfg$years$start < 1979) stop("gridMET starts in 1979")
-  if (!(cfg$rollup$burn_day_share > 0 && cfg$rollup$burn_day_share <= 1)) {
+  rule <- if (is.null(cfg$rollup$burn_day_rule)) "acres" else cfg$rollup$burn_day_rule
+  if (!rule %in% c("acres", "share")) {
+    stop("rollup$burn_day_rule must be 'acres' or 'share'")
+  }
+  if (rule == "acres" && !(is.numeric(cfg$rollup$burn_day_acres) &&
+                           cfg$rollup$burn_day_acres > 0)) {
+    stop("rollup$burn_day_acres must be a positive number")
+  }
+  if (rule == "share" && !(cfg$rollup$burn_day_share > 0 &&
+                           cfg$rollup$burn_day_share <= 1)) {
     stop("rollup$burn_day_share must be in (0, 1]")
   }
   cfg$year_list <- seq.int(cfg$years$start, cfg$years$end)

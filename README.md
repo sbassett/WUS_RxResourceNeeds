@@ -10,7 +10,7 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 - [x] Spot-check the 13 treatable BPS classes and the excluded forest classes in `config/treatable_bps.csv` (e.g. aspen and mesic mixed conifer, whose FRG varies by map zone).
 - [ ] Confirm Swain ST1 Forest Plans is the right threshold set (`thresholds.plan_set` in `config/pipeline.yml`).
 - [x] Mid-flame wind follows Swain et al. 2023 exactly (daily-mean 10 m wind × 1.5 × 0.4; `wind.method: swain`). Andrews WAFs remain available as `wind.method: andrews`.
-- [ ] Confirm `rx_share ≥ 0.5` as the unit burn-day cutoff (`rollup.burn_day_share`).
+- [x] Unit burn day = at least 441 treatable acres in prescription (one minimum-size burn unit; `rollup.burn_day_rule: acres`). The share rule remains available as `burn_day_rule: share`.
 
 **Add missing data layers**
 - [ ] Wilderness boundaries, then enable `target_area.wilderness`.
@@ -63,7 +63,7 @@ Requires R ≥ 4.3 (built with R 4.6.1 on Windows) and internet access for first
 1. Restore packages: `renv::restore()`
 2. LANDFIRE's LFPS v2 API requires an email. Add it to your user `.Renviron`: `LANDFIRE_EMAIL=you@example.org`
 3. Build: `targets::tar_make()` (inspect with `targets::tar_visnetwork()`, read results with `targets::tar_read(rx_target)`)
-4. Test: `Rscript tests/run_tests.R` (211 expectations)
+4. Test: `Rscript tests/run_tests.R` (223 expectations)
 
 All settings live in `config/pipeline.yml`. The config is split into per-section targets, so changing `years` doesn't redo the 30 m LANDFIRE processing. First-time downloads can be run in parallel with `Rscript tools/prefetch_landfire.R fuels 1 2` (and `fuels 2 2`, `evt`, `bps`) and `Rscript tools/prefetch_gridmet.R 1979 2025` after `bbox`/`lf_tiles` are built.
 
@@ -146,7 +146,9 @@ All of this runs at 30 m on a mosaic of 55 LFPS tiles (~673M cells), then aggreg
 ### Daily classification and rollup
 - **Daily classification:** every pixel, every day: 1 if all enabled thresholds are met, 0 if not, NA if any input is missing (`R/classify.R`).
 - **`rx_share`:** each unit's daily `rx_share` is the share of its treatable area that is in prescription. Cells are weighted by polygon coverage × treatable fraction × cell area (`R/rollup.R`).
-- **Derived counts:** a unit burn day is `rx_share ≥ 0.5` (`rollup.burn_day_share`). Weeks are fixed 7-day day-of-year bins, with days 365/366 folded into week 52. `pixel_mean_days` is the treatable-area-weighted mean count of in-Rx days across pixels.
+- **`rx_acres`:** the same weighted sum expressed as treatable acres in prescription that day.
+- **Burn day:** a unit burn day is `rx_acres ≥ 441`, meaning there's enough treatable area in prescription to burn one minimum-size unit (`rollup.burn_day_rule: acres`, `burn_day_acres`). The alternative `burn_day_rule: share` uses `rx_share ≥ burn_day_share`. Under the acreage rule, a unit with less than 441 treatable acres never has a burn day.
+- **Derived counts:** weeks are fixed 7-day day-of-year bins, with days 365/366 folded into week 52. `pixel_mean_days` is the treatable-area-weighted mean count of in-Rx days across pixels.
 
 ### Predictability and synchrony
 In `R/summaries.R`:
@@ -180,10 +182,11 @@ The full report is in [`docs/report.md`](docs/report.md).
 | Units with daily rx_share (overlap treatable gridMET cells) | 1,321 |
 | Units with treatable area inside their boundary | 1,158 |
 | Treatable (target) area | 5.70 M ac |
-| Annual Rx need (AFN) | ~443,000 ac/yr; median MFRI_eff 13 yr; median BFN 7.7 ac/burn day |
-| Mean annual burn days per unit | median 24 (IQR 18–30.5), interannual CV median 0.44 |
-| Trend in mean annual burn days | +2.1 days/decade (p = 0.01) |
-| Median pairwise burn-day Jaccard | 0.12; south and north NM are largely out of sync |
+| Annual Rx need (AFN) | ~443,000 ac/yr; median MFRI_eff 13 yr; median BFN 8.2 ac/burn day |
+| Units that can host a 441 ac burn day | 906 (they carry 99.5% of AFN); 415 units have < 441 treatable ac and never have a burn day |
+| Mean annual burn days per unit (units with burn days) | median 35 (IQR 25–48), interannual CV median 0.38 |
+| Trend in mean annual burn days | +2.1 days/decade (p = 0.05) |
+| Median pairwise burn-day Jaccard | 0.07; south and north NM are largely out of sync |
 
 Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37%, 1-hr FM 54%, 100-hr FM 57%, temperature 76%, 1000-hr FM 77%, RH 79%, mid-flame wind 95%. All thresholds together pass on about 10% of days, so fuel moisture limits burning the most.
 
@@ -197,7 +200,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | Daily in-Rx | `data/processed/burn_days/inrx_{year}.tif` | INT1U: 1 in Rx, 0 out, 255 = NA |
 | Fuels / WAF | `data/processed/landfire/waf_gridmet.tif`, `fuel_by_gridmet_cell.csv` | waf, modal fbfm40, canopy means, sheltered |
 | Target area | `data/processed/landfire/treatable_30m.tif`, `treatable_frac_gridmet.tif`, `project_landfire_stats.csv`, `treatable_bps_codes.csv`, `treatable_evt_codes.csv` | 30 m mask; fraction per cell; per-unit treatable_ac, afn_ac, heavy_fuel_share, mean_slope_deg |
-| Daily rollup | `data/processed/rx_share_daily.parquet` | project_id, date, rx_share |
+| Daily rollup | `data/processed/rx_share_daily.parquet` | project_id, date, rx_share, rx_acres |
 | Synchrony | `data/processed/synchrony_pairs.parquet` | project_a, project_b, jaccard, weekly_cor |
 | Tables | `results/tables/` | annual_burn_days, burn_day_variability, weekly_exceedance, rx_target_afn_bfn, thresholds_applied, and `*_STUB.csv` downstream tables |
 | Figures | `results/figures/` | maps of inputs, burn-day climatology/CV/trend, exceedance, synchrony, AFN/BFN, state weekly need (stub) |
@@ -207,7 +210,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 
 | Stage | Status | Notes |
 |---|---|---|
-| Scaffolding (renv, targets, testthat) | Implemented | 211 test expectations |
+| Scaffolding (renv, targets, testthat) | Implemented | 223 test expectations |
 | Swain ST1 thresholds → config | Implemented | verified against extracted ST1 |
 | Study area + subfiresheds | Implemented | |
 | gridMET sourcing | Implemented | OPeNDAP via ncdf4 (climateR not needed) |

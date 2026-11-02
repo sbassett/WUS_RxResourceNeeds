@@ -103,13 +103,21 @@ fig_project_choropleth <- function(projects, values, col, title, lab, file,
   save_fig(p, file)
 }
 
-fig_rx_share_ts <- function(daily, annual, project_id, out_dir) {
+fig_rx_share_ts <- function(daily, annual, project_id, out_dir, rule = 0.5) {
   d <- daily[daily$project_id == project_id, ]
-  p1 <- ggplot2::ggplot(d, ggplot2::aes(.data$date, .data$rx_share)) +
+  r <- burn_day_rule(rule)
+  if (r$rule == "acres") {
+    d$y <- d$rx_acres; cut <- r$acres
+    ttl <- "Daily in-Rx treatable acres"; ylab <- "acres in prescription"
+  } else {
+    d$y <- d$rx_share; cut <- r$share
+    ttl <- "Daily rx_share"; ylab <- "share of target area in Rx"
+  }
+  p1 <- ggplot2::ggplot(d, ggplot2::aes(.data$date, .data$y)) +
     ggplot2::geom_line(linewidth = 0.3) +
-    ggplot2::geom_hline(yintercept = 0.5, linetype = 2, color = "red") +
-    ggplot2::labs(title = paste("Daily rx_share, project", project_id), x = NULL,
-                  y = "share of target area in Rx") +
+    ggplot2::geom_hline(yintercept = cut, linetype = 2, color = "red") +
+    ggplot2::labs(title = paste0(ttl, ", unit ", project_id), x = NULL,
+                  y = ylab, subtitle = paste("dashed line = burn-day cutoff", cut)) +
     ggplot2::theme_minimal()
   a <- annual[annual$project_id == project_id, ]
   p2 <- ggplot2::ggplot(a, ggplot2::aes(factor(.data$year), .data$burn_days)) +

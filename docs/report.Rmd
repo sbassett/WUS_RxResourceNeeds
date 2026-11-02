@@ -22,7 +22,7 @@ sann <- tb("state_annual_need_STUB.csv")
 fig <- function(f) knitr::asis_output(sprintf("![](../results/figures/%s)\n\n", f))
 ```
 
-Years: **`r cfg$years$start`–`r cfg$years$end`**. Units: **`r nrow(rxt)`** Fireshed Registry subfiresheds intersecting `r cfg$aoi$state_abbr`. Thresholds: Swain et al. 2023 ST1, `r cfg$thresholds$plan_set` plans. Project burn day: rx_share ≥ `r cfg$rollup$burn_day_share`.
+Years: **`r cfg$years$start`–`r cfg$years$end`**. Units: **`r nrow(rxt)`** Fireshed Registry subfiresheds intersecting `r cfg$aoi$state_abbr`. Thresholds: Swain et al. 2023 ST1, `r cfg$thresholds$plan_set` plans. Unit burn day: `r if (identical(cfg$rollup$burn_day_rule, "share")) paste("rx_share ≥", cfg$rollup$burn_day_share) else paste("in-prescription treatable area ≥", cfg$rollup$burn_day_acres, "ac")`.
 
 Generated `r format(Sys.time(), "%Y-%m-%d %H:%M")`.
 

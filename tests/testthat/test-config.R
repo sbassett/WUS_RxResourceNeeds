@@ -14,9 +14,18 @@ test_that("pipeline config validation catches bad values", {
   bad <- cfg; bad$gridmet <- NULL
   yaml::write_yaml(bad, f)
   expect_error(read_pipeline_config(f), "gridmet")
-  bad <- cfg; bad$rollup$burn_day_share <- 1.5
+  bad <- cfg; bad$rollup$burn_day_rule <- "share"; bad$rollup$burn_day_share <- 1.5
   yaml::write_yaml(bad, f)
   expect_error(read_pipeline_config(f), "burn_day_share")
+  bad <- cfg; bad$rollup$burn_day_acres <- -5
+  yaml::write_yaml(bad, f)
+  expect_error(read_pipeline_config(f), "burn_day_acres")
+  bad <- cfg; bad$rollup$burn_day_rule <- "pixels"
+  yaml::write_yaml(bad, f)
+  expect_error(read_pipeline_config(f), "burn_day_rule")
+  ok <- read_pipeline_config(root_file("config/pipeline.yml"))
+  expect_equal(ok$rollup$burn_day_rule, "acres")
+  expect_equal(ok$rollup$burn_day_acres, 441)
 })
 
 test_that("thresholds load and convert units", {

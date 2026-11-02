@@ -26,6 +26,32 @@ test_that("project_cell_weights uses coverage x treatable fraction x area", {
   expect_equal(w[3] / w[1], 0.5, tolerance = 0.01)
 })
 
+test_that("weighted acres are in-Rx treatable area", {
+  # weights in km2; 1 km2 = 247.105 ac
+  W <- Matrix::sparseMatrix(i = c(1, 1), j = c(1, 2), x = c(1, 3), dims = c(1, 2),
+                            dimnames = list("10", NULL))
+  X <- cbind(d1 = c(1, 0), d2 = c(1, 1), d3 = c(NA, 1))
+  a <- weighted_acres(W, X)
+  expect_equal(unname(a[1, ]), c(1, 4, 3) * 247.1053815)
+  s <- weighted_share(W, X)
+  # share x valid treatable acres = in-Rx acres
+  expect_equal(unname(s[1, 3]) * 3 * 247.1053815, unname(a[1, 3]))
+})
+
+test_that("acreage burn-day rule", {
+  daily <- data.frame(project_id = 1L, date = as.Date("2021-01-01") + 0:3,
+                      rx_share = c(0.1, 0.9, NA, 1), rx_acres = c(441, 300, NA, 440.5))
+  r <- list(burn_day_rule = "acres", burn_day_acres = 441, burn_day_share = 0.5)
+  expect_equal(flag_burn_days(daily, r), c(1L, 0L, NA, 0L))
+  r$burn_day_rule <- "share"
+  expect_equal(flag_burn_days(daily, r), c(0L, 1L, NA, 1L))
+  expect_equal(flag_burn_days(daily, 0.5), c(0L, 1L, NA, 1L))   # bare number = share
+  expect_error(flag_burn_days(daily["rx_share"], list(burn_day_acres = 1)), "rx_acres")
+  expect_error(flag_burn_days(daily, list(burn_day_rule = "x")), "acres")
+  cc <- burn_day_counts(daily, list(burn_day_rule = "acres", burn_day_acres = 441))
+  expect_equal(cc$annual$burn_days, 1)
+})
+
 test_that("burn day counts", {
   daily <- data.frame(project_id = 1L,
                       date = as.Date("2021-01-01") + 0:9,

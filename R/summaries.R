@@ -26,9 +26,10 @@ burn_day_variability <- function(annual) {
 }
 
 #' Burn-day matrix [day, project] (0/1, NA -> 0) from the daily table
-burn_day_matrix <- function(daily, threshold = 0.5) {
+burn_day_matrix <- function(daily, rule = 0.5) {
   d <- daily
-  d$b <- as.integer(!is.na(d$rx_share) & d$rx_share >= threshold)
+  d$b <- flag_burn_days(d, rule)
+  d$b[is.na(d$b)] <- 0L
   ids <- sort(unique(d$project_id))
   dates <- sort(unique(d$date))
   m <- matrix(0L, length(dates), length(ids),
@@ -57,8 +58,8 @@ weekly_count_cor <- function(B, n_weeks = 52L) {
 }
 
 #' Long upper-triangle synchrony table
-synchrony_table <- function(daily, threshold = 0.5, n_weeks = 52L) {
-  B <- burn_day_matrix(daily, threshold)
+synchrony_table <- function(daily, rule = 0.5, n_weeks = 52L) {
+  B <- burn_day_matrix(daily, rule)
   J <- jaccard_matrix(B)
   C <- weekly_count_cor(B, n_weeks)
   ut <- which(upper.tri(J), arr.ind = TRUE)

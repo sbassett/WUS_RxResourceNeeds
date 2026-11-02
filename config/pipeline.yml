@@ -104,7 +104,15 @@ burn_days:
 
 # Project-area rollup
 rollup:
-  burn_day_share: 0.5        # project burn day when rx_share >= this
+  # Unit burn-day rule:
+  #   "acres" (default): burn day when in-Rx treatable acres >= burn_day_acres,
+  #           i.e. enough area in prescription to burn one minimum-size unit
+  #           (441 ac, USFS burn-plan reporting; see downstream unit_size).
+  #   "share": burn day when rx_share >= burn_day_share.
+  # Units with < burn_day_acres of treatable area can never have a burn day.
+  burn_day_rule: "acres"
+  burn_day_acres: 441
+  burn_day_share: 0.5        # used only when burn_day_rule = "share"
   out: "data/processed/rx_share_daily.parquet"
   # Week definition: fixed 7-day day-of-year bins; days 365/366 fold into 52.
   n_weeks: 52
