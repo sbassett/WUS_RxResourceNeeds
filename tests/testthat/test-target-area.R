@@ -50,6 +50,21 @@ test_that("slope and wilderness filters", {
   expect_equal(apply_treatable_filters(treat), treat)
 })
 
+test_that("wilderness loader repairs invalid polygons and reprojects", {
+  # self-intersecting "bowtie" polygon is invalid
+  bow <- sf::st_polygon(list(rbind(c(0, 0), c(1000, 1000), c(1000, 0), c(0, 1000), c(0, 0))))
+  sq <- sf::st_polygon(list(rbind(c(2000, 0), c(3000, 0), c(3000, 1000), c(2000, 1000), c(2000, 0))))
+  x <- sf::st_sf(NAME = c("bow", "sq"), geometry = sf::st_sfc(bow, sq, crs = 3857))
+  expect_false(all(sf::st_is_valid(x)))
+  f <- tempfile(fileext = ".gpkg"); sf::st_write(x, f, quiet = TRUE)
+  w <- load_wilderness(f, 5070)
+  expect_true(all(sf::st_is_valid(w)))
+  expect_equal(sf::st_crs(w), sf::st_crs(5070))
+  expect_true(all(sf::st_geometry_type(w) %in% c("POLYGON", "MULTIPOLYGON")))
+  expect_setequal(unique(w$NAME), c("bow", "sq"))
+  expect_equal(ensure_wilderness(list(enabled = FALSE)), character())
+})
+
 test_that("minimum patch size", {
   expect_equal(min_patch_cells(20), 90)            # 20 ac / 0.2224 ac
   r <- terra::rast(nrows = 6, ncols = 6, xmin = 0, xmax = 180, ymin = 0, ymax = 180,

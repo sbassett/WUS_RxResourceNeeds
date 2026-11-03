@@ -91,8 +91,11 @@ target_area:
     enabled: true
     max_pct: 25              # NRCS 2010 soil-movement guidance
   wilderness:
-    enabled: false           # needs a wilderness boundary layer (not yet sourced)
-    path: "data/raw/wilderness.gpkg"
+    # Designated wilderness (NWPS, wilderness.net, Nov 2024): no planned Rx.
+    # Wilderness Study Areas are not included.
+    enabled: true
+    url: "https://www.wilderness.net/GIS/Wilderness_Areas.zip"
+    path: "data/raw/Wilderness_Areas/Wilderness_Areas/WildernessAreas2024.shp"
   min_patch:
     enabled: true
     acres: 20

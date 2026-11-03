@@ -13,7 +13,8 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 - [x] Unit burn day = at least 441 treatable acres in prescription (one minimum-size burn unit; `rollup.burn_day_rule: acres`). The share rule remains available as `burn_day_rule: share`.
 
 **Add missing data layers**
-- [ ] Wilderness boundaries, then enable `target_area.wilderness`.
+- [x] Exclude designated wilderness from planned Rx (wilderness.net NWPS boundaries, Nov 2024; `target_area.wilderness`).
+- [ ] Decide whether BLM Wilderness Study Areas should also be excluded (needs the BLM WSA layer).
 - [ ] WUI layer (wildfirerisk.org Community Wildfire Risk Reduction Zones) to replace the placeholder `wui_share`.
 
 **Calibrate downstream stages** (placeholders in `config/downstream_params.yml`)
@@ -30,6 +31,7 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 
 **Open questions from the pseudocode**
 - [ ] Validate predicted burn windows against observed Rx burns (WildCAD, etc.).
+- [ ] Investigate whether managed wildfire (wildfire managed for resource objectives, e.g. Gila and Aldo Leopold wilderness) competes with planned Rx for the same people and equipment. Questions: does managed-wildfire season overlap the burn windows predicted here; how many resources does it tie up; and how much of the dry-forest fire need (including the ~284k treatable ac in wilderness excluded from this planned-Rx estimate) does it meet?
 - [ ] Extend from the NM pilot to the western US.
 
 ## Goal and pilot scope
@@ -63,7 +65,7 @@ Requires R ≥ 4.3 (built with R 4.6.1 on Windows) and internet access for first
 1. Restore packages: `renv::restore()`
 2. LANDFIRE's LFPS v2 API requires an email. Add it to your user `.Renviron`: `LANDFIRE_EMAIL=you@example.org`
 3. Build: `targets::tar_make()` (inspect with `targets::tar_visnetwork()`, read results with `targets::tar_read(rx_target)`)
-4. Test: `Rscript tests/run_tests.R` (223 expectations)
+4. Test: `Rscript tests/run_tests.R` (229 expectations)
 
 All settings live in `config/pipeline.yml`. The config is split into per-section targets, so changing `years` doesn't redo the 30 m LANDFIRE processing. First-time downloads can be run in parallel with `Rscript tools/prefetch_landfire.R fuels 1 2` (and `fuels 2 2`, `evt`, `bps`) and `Rscript tools/prefetch_gridmet.R 1979 2025` after `bbox`/`lf_tiles` are built.
 
@@ -139,7 +141,7 @@ A 30 m pixel is treatable when it is **historical dry forest** (BPS) **and curre
 |---|---|
 | slope ≤ 25% (LF SlpD) | on |
 | minimum patch 20 ac (8-connected) | on |
-| wilderness exclusion | off; no wilderness layer sourced yet |
+| designated wilderness exclusion (wilderness.net NWPS 2024; geometries repaired) | on |
 
 All of this runs at 30 m on a mosaic of 55 LFPS tiles (~673M cells), then aggregates to a treatable fraction per gridMET cell.
 
@@ -179,14 +181,14 @@ The full report is in [`docs/report.md`](docs/report.md).
 | Quantity | Value |
 |---|---|
 | Subfiresheds analysed | 3,157 |
-| Units with daily rx_share (overlap treatable gridMET cells) | 1,321 |
-| Units with treatable area inside their boundary | 1,158 |
-| Treatable (target) area | 5.70 M ac |
-| Annual Rx need (AFN) | ~443,000 ac/yr; median MFRI_eff 13 yr; median BFN 8.2 ac/burn day |
-| Units that can host a 441 ac burn day | 906 (they carry 99.5% of AFN); 415 units have < 441 treatable ac and never have a burn day |
-| Mean annual burn days per unit (units with burn days) | median 35 (IQR 25–48), interannual CV median 0.38 |
+| Units with daily rx_share (overlap treatable gridMET cells) | 1,306 |
+| Units with treatable area inside their boundary | 1,140 |
+| Treatable (target) area, designated wilderness excluded | 5.42 M ac (~284k ac of dry forest in wilderness removed) |
+| Annual planned-Rx need (AFN) | ~420,000 ac/yr; median MFRI_eff 13 yr; median BFN 8.1 ac/burn day |
+| Units that can host a 441 ac burn day | 881 (they carry 99.5% of AFN); the rest have < 441 treatable ac and never have a burn day |
+| Mean annual burn days per unit (units with burn days) | median 34 (IQR 25–47), interannual CV median 0.38 |
 | Trend in mean annual burn days | +2.1 days/decade (p = 0.05) |
-| Median pairwise burn-day Jaccard | 0.07; south and north NM are largely out of sync |
+| Median pairwise burn-day Jaccard | 0.06; south and north NM are largely out of sync |
 
 Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37%, 1-hr FM 54%, 100-hr FM 57%, temperature 76%, 1000-hr FM 77%, RH 79%, mid-flame wind 95%. All thresholds together pass on about 10% of days, so fuel moisture limits burning the most.
 
@@ -210,14 +212,14 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 
 | Stage | Status | Notes |
 |---|---|---|
-| Scaffolding (renv, targets, testthat) | Implemented | 223 test expectations |
+| Scaffolding (renv, targets, testthat) | Implemented | 229 test expectations |
 | Swain ST1 thresholds → config | Implemented | verified against extracted ST1 |
 | Study area + subfiresheds | Implemented | |
 | gridMET sourcing | Implemented | OPeNDAP via ncdf4 (climateR not needed) |
 | NFDRS 1-hr / 10-hr FM | Implemented | srad-based state-of-weather approximation |
 | LANDFIRE sourcing + WAF grid | Implemented | LF2022 fuels/EVT, LF2020 BPS/SlpD |
 | Daily in-Rx classification | Implemented | |
-| Target-area mask | Implemented | BPS × EVT crosswalks; wilderness toggle needs a layer |
+| Target-area mask | Implemented | BPS × EVT crosswalks; slope, minimum patch, designated wilderness excluded |
 | Unit daily rollup | Implemented | |
 | Predictability and synchrony | Implemented | |
 | Full 1979–2025 run | Done | see docs/run_notes.md |
@@ -232,7 +234,8 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 - The NFDRS state-of-weather adjustment is an approximation from daily srad; the breakpoints are in `nfdrs.sow_breaks`.
 - Mid-flame wind uses Swain's flat 1.5 × 0.4 scaling, so it doesn't account for canopy sheltering. Fuel-based WAFs are available with `wind.method: andrews`.
 - BPS fire regime group can vary by map zone for the same BPS_CODE. The crosswalk makes one decision per BPS_CODE; aspen (I-C/IV-B) and mesic mixed conifer (I-C/III-A) are included everywhere.
-- Wilderness exclusion isn't sourced. WUI isn't sourced either (the pseudocode cites wildfirerisk.org), so the WUI share is a placeholder.
+- This is a planned-Rx estimate only. Designated wilderness is excluded, and fire need met by managed wildfire isn't counted. Wilderness Study Areas aren't excluded.
+- WUI isn't sourced yet (the pseudocode cites wildfirerisk.org), so the WUI share is a placeholder.
 - The minimum-patch filter uses GDAL sieve (see run notes). Patches crossing LANDFIRE tile seams are handled on the mosaic.
 - All downstream parameters are placeholders. State need figures show only that the pipeline works.
 

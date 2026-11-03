@@ -61,6 +61,31 @@ apply_treatable_filters <- function(treat, slope_deg = NULL, max_slope_pct = NUL
 
 min_patch_cells <- function(acres, res_m = 30) ceiling(acres / pixel_acres(res_m))
 
+#' Download and unzip the wilderness layer if missing; returns the .shp path
+#' (or "" when the exclusion is disabled, so the file target stays valid)
+ensure_wilderness <- function(wcfg) {
+  if (!isTRUE(wcfg$enabled)) return(character())
+  if (file.exists(wcfg$path)) return(wcfg$path)
+  zip <- file.path("data/raw", basename(sub("\\?.*$", "", wcfg$url)))
+  ensure_dir(dirname(zip))
+  old <- options(timeout = 1800); on.exit(options(old))
+  utils::download.file(wcfg$url, zip, mode = "wb")
+  utils::unzip(zip, exdir = sub("\\.zip$", "", zip))
+  if (!file.exists(wcfg$path)) stop("wilderness shapefile not found after unzip: ", wcfg$path)
+  wcfg$path
+}
+
+#' Wilderness boundaries reprojected and repaired
+#'
+#' wilderness.net WildernessAreas2024 is in EPSG:3857 and ~3% of polygons are
+#' invalid; repair before rasterizing. Returns polygons only.
+load_wilderness <- function(path, crs) {
+  w <- sf::st_read(path, quiet = TRUE)
+  w <- sf::st_make_valid(sf::st_transform(sf::st_make_valid(w), crs))
+  w <- sf::st_collection_extract(w, "POLYGON", warn = FALSE)
+  w[!sf::st_is_empty(w), ]
+}
+
 #' Remove treatable patches (8-connected) smaller than min_cells
 #'
 #' Uses GDAL's sieve filter (terra::sieve), which merges polygons below the
@@ -132,7 +157,7 @@ build_landfire_derived <- function(fuels_vrt, evt_vrt, bps_vrt, evt_attr, bps_at
     if (!file.exists(ta_cfg$wilderness$path)) {
       stop("wilderness exclusion enabled but layer not found: ", ta_cfg$wilderness$path)
     }
-    w <- sf::st_transform(sf::st_read(ta_cfg$wilderness$path, quiet = TRUE), 5070)
+    w <- load_wilderness(ta_cfg$wilderness$path, terra::crs(treat))
     wr <- terra::rasterize(terra::vect(w), treat, field = 1, background = 0)
     treat <- terra::ifel(wr == 1, 0L, treat)
   }
