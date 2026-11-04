@@ -12,11 +12,21 @@ size_bins:
   - {bin: "1201-1600", min: 1201, max: 1600}
   - {bin: "1601-2000", min: 1601, max: 2000}
 
-# Unit size limits (USFS burn-plan reporting, per pseudocode)
+# Unit size limits (USFS burn-plan reporting, per pseudocode). A patch pool of
+# area A is split into ceiling(A / cap) equal units, so these caps give the
+# LARGEST plausible units; real units are usually smaller. nonwui_split_ac
+# (default: nonwui_max) is the cap used for splitting non-WUI pools; lower it
+# to calibrate against observed burn sizes (TWIGS comparison).
 unit_size:
   nonwui_min: 441
   nonwui_max: 2000
   wui_max: 441
+  # TWIGS completed NM broadcast burns: median 97 ac, 75% <= 441 ac by count,
+  # but 71% of acres burned in units > 2000 ac. The model splits patches into
+  # equal units <= this cap, so it cannot reproduce the small-burn tail yet
+  # (that needs a size *distribution*, a later calibration step). 1000 ac is a
+  # middle-ground placeholder between the 2000 ac plan cap and typical burns.
+  nonwui_split_ac: 1000
 
 # Fallback WUI share of annual Rx acres, used only for units where the CWiRRZ
 # per-unit wui_share is missing (see target_area.wui in pipeline.yml).

@@ -36,6 +36,8 @@ list(
   tar_target(cfg_rollup, cfg$rollup),
   tar_target(cfg_summaries, cfg$summaries),
   tar_target(cfg_results, cfg$results),
+  tar_target(cfg_landowner, cfg$landowner),
+  tar_target(cfg_twigs, cfg$twigs),
   tar_target(st1_file, "config/swain2023_ST1.csv", format = "file"),
   tar_target(thr_file, "config/burn_thresholds.yml", format = "file"),
   tar_target(thresholds, load_thresholds(thr_file, cfg_thresholds$plan_set)),
@@ -115,6 +117,39 @@ list(
   # file target so content changes (not just path changes) propagate
   tar_target(project_stats_file, lf_derived$project_stats, format = "file"),
   tar_target(project_stats, utils::read.csv(project_stats_file)),
+  tar_target(treatable_30m_file, lf_derived$treatable_30m, format = "file"),
+
+  # ---- landowner, patches, burn units ------------------------------------------
+  tar_target(padus_fee_file_path, padus_fee_file(bbox, cfg_landowner, cfg_crs),
+             format = "file"),
+  tar_target(landowner_file,
+             { fee <- sf::st_read(padus_fee_file_path, quiet = TRUE)
+               ensure_dir(cfg_landowner$out_dir)
+               f <- file.path(cfg_landowner$out_dir, "landowner_30m.tif")
+               rasterize_owner(fee, terra::rast(treatable_30m_file), f)
+               f },
+             format = "file"),
+  tar_target(wui_30m_file,
+             build_wui_raster(cfg_target_area$wui, treatable_30m_file,
+                              file.path(cfg_landowner$out_dir, "wui_30m.tif"),
+                              file.path(cfg_landowner$out_dir, "tmp")),
+             format = "file"),
+  tar_target(patches,
+             build_patches(projects[projects$project_id %in%
+                                      project_stats$project_id[project_stats$treatable_ac > 0], ],
+                           treatable_30m_file, landowner_file, wui_30m_file,
+                           bps_vrt, bps_attr),
+             format = "parquet"),
+  tar_target(patch_check, check_patches(patches, project_stats)),
+  tar_target(burn_units, { force(patch_check); build_burn_units(patches, params) },
+             format = "parquet"),
+  tar_target(unit_sizes, unit_size_distribution(burn_units)),
+  tar_target(twigs_raw, fetch_twigs_burns(cfg_twigs)),
+  tar_target(twigs, {
+    x <- clean_twigs(twigs_raw, cfg_twigs$min_year)
+    if (isTRUE(cfg_twigs$completed_only)) x <- x[x$status %in% "Completed", ]
+    x }),
+  tar_target(size_compare, twigs_size_compare(burn_units, twigs, params, "USFS")),
 
   # ---- burn-day classification --------------------------------------------
   tar_target(inrx_files,
@@ -146,7 +181,7 @@ list(
 
   # ---- downstream ------------------------------------------------------------
   tar_target(rx_target, compute_rx_target(project_stats, variability)),
-  tar_target(units_dist, unit_size_complexity(rx_target, params)),
+  tar_target(units_dist, unit_size_complexity(burn_units, params)),
   tar_target(units_fired, line_production(firing_method(units_dist, project_stats, params),
                                           params)),
   tar_target(fire_matrix, firing_matrix(params)),
@@ -168,7 +203,9 @@ list(
       write_table_csv(state_summary$weekly, d, "state_weekly_need_STUB.csv"),
       write_table_csv(state_summary$annual, d, "state_annual_need_STUB.csv"),
       write_table_csv(state_summary$peak_season, d, "state_peak_season_STUB.csv"),
-      write_table_csv(thresholds, d, "thresholds_applied.csv"))
+      write_table_csv(thresholds, d, "thresholds_applied.csv"),
+      write_table_csv(unit_sizes, d, "burn_unit_size_distribution.csv"),
+      write_table_csv(size_compare, d, "unit_size_vs_twigs_usfs.csv"))
   }, format = "file"),
 
   # ---- figures -------------------------------------------------------------
@@ -203,7 +240,9 @@ list(
       fig_rx_share_ts(daily, counts$annual, example_project, o, cfg_rollup),
       fig_exceedance(exceedance, example_project, o),
       fig_synchrony(synchrony, projects, o),
-      fig_state_weekly(state_summary$weekly, o))
+      fig_state_weekly(state_summary$weekly, o),
+      fig_landowner_bars(burn_units, o),
+      fig_unit_size_compare(size_compare, o))
   }, format = "file"),
 
   # ---- report ----------------------------------------------------------------

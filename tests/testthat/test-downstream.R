@@ -14,19 +14,33 @@ test_that("Rx target hand calculation and zero-burn-day flag", {
   expect_true(is.na(t$bfn_typical[3]))
 })
 
-rx <- data.frame(project_id = 1:2, afn_ac = c(10000, 0), bd_mean = c(30, 0))
+# burn units: 2 patches, one WUI-heavy, with AFN proportional to area
+bu <- data.frame(
+  project_id = c(1L, 1L, 1L),
+  patch_id   = c(1L, 1L, 2L),
+  owner      = c("USFS", "USFS", "Private"),
+  owner_group = c("Federal", "Federal", "Private/Other"),
+  wui        = c(TRUE, FALSE, FALSE),
+  n_units    = c(1, 2, 1),
+  unit_ac    = c(400, 900, 300),
+  area_ac    = c(400, 1800, 300),
+  afn_ac     = c(40, 180, 30),
+  below_min  = c(FALSE, FALSE, TRUE),
+  size_bin   = c("201-400", "801-1200", "201-400"),
+  stringsAsFactors = FALSE)
 
 test_that("unit size x complexity schema and acre conservation", {
-  u <- unit_size_complexity(rx, params)
-  expect_named(u, c("project_id", "wui", "complexity", "size_bin", "unit_ac", "acres",
-                    "n_units"), ignore.order = TRUE)
-  expect_equal(sum(u$acres), 10000)
-  expect_true(all(u$unit_ac[u$wui] <= params$unit_size$wui_max))
-  expect_true(all(u$unit_ac[!u$wui] >= params$unit_size$nonwui_min))
-  expect_true(all(u$unit_ac <= params$unit_size$nonwui_max))
-  expect_equal(sum(u$acres[u$wui]), 10000 * params$wui_share)
-  expect_false(2L %in% u$project_id)
+  u <- unit_size_complexity(bu, params)
+  expect_named(u, c("project_id", "owner_group", "wui", "complexity", "size_bin",
+                    "unit_ac", "acres", "n_units"), ignore.order = TRUE)
+  # acres of need conserved across complexity split
+  expect_equal(sum(u$acres), sum(bu$afn_ac))
+  # complexity shares reproduce config
+  cs <- unlist(params$complexity_share)
+  expect_equal(sum(u$acres[u$complexity == "low"]) / sum(u$acres), unname(cs["low"]))
 })
+
+rx <- data.frame(project_id = 1:2, afn_ac = c(10000, 0), bd_mean = c(30, 0))
 
 test_that("firing rules", {
   fp <- params$firing
@@ -45,7 +59,7 @@ test_that("firing rules", {
 
 test_that("line production and resource mix schemas", {
   ps <- data.frame(project_id = 1L, heavy_fuel_share = 0)
-  u <- line_production(firing_method(unit_size_complexity(rx, params), ps, params), params)
+  u <- line_production(firing_method(unit_size_complexity(bu, params), ps, params), params)
   expect_true(all(c("firing_method", "firing_days_per_unit", "line_production_ch_hr") %in%
                     names(u)))
   expect_true(is.numeric(u$line_production_ch_hr))

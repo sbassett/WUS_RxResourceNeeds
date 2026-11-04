@@ -109,6 +109,24 @@ target_area:
     path: "data/raw/RDS-2024-0030_Data_CONUS/Data/CONUS/CWiRRZ_CONUS.tif"
   out_dir: "data/processed/landfire"
 
+# Landowner: PAD-US 4.1 Fee (ownership) polygons from the USGS service.
+# PAD-US has no complete private class, so private = not covered by a Fee
+# polygon (plus Fee polygons owned by private owners).
+landowner:
+  url: "https://edits.nationalmap.gov/arcgis/rest/services/PAD-US/PAD_US_4_1/MapServer/0"
+  simplify_m: 15             # server-side generalisation (about half a 30 m pixel)
+  cache_dir: "data/raw/padus"
+  out_dir: "data/processed/landowner"
+
+# Past burns for comparison: TWIGS Treatment Index (attributes only).
+# New Mexico broadcast burning records are Forest Service only.
+twigs:
+  url: "https://gis.reshapewildfire.org/arcgis/rest/services/Hosted/Treatment_Index_View/FeatureServer/0"
+  state: "NM"
+  cache: "data/raw/twigs/twigs_nm_broadcast_burning.csv"
+  min_year: 1990
+  completed_only: true
+
 # Burn-day classification output
 burn_days:
   out_dir: "data/processed/burn_days"

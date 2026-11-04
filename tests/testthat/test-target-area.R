@@ -75,17 +75,6 @@ test_that("CWiRRZ WUI classes are option B (Direct+Indirect+WTZ)", {
   expect_null(cwirrz_wui_mask(list(enabled = FALSE), r, tempdir()))
 })
 
-test_that("unit size x complexity uses per-unit WUI share", {
-  params <- read_downstream_params(root_file("config/downstream_params.yml"))
-  rx <- data.frame(project_id = 1:2, afn_ac = c(1000, 1000), wui_share = c(0.5, NA))
-  u <- unit_size_complexity(rx, params)
-  w1 <- sum(u$acres[u$project_id == 1 & u$wui])
-  w2 <- sum(u$acres[u$project_id == 2 & u$wui])
-  expect_equal(w1, 500)                         # from data
-  expect_equal(w2, 1000 * params$wui_share)     # fallback where NA
-  expect_true(all(u$unit_ac[u$wui] <= params$unit_size$wui_max))
-})
-
 test_that("minimum patch size", {
   expect_equal(min_patch_cells(20), 90)            # 20 ac / 0.2224 ac
   r <- terra::rast(nrows = 6, ncols = 6, xmin = 0, xmax = 180, ymin = 0, ymax = 180,

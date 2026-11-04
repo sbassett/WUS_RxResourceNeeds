@@ -205,3 +205,31 @@ fig_burn_day_trend <- function(annual, out_dir) {
     ggplot2::theme_minimal()
   save_fig(p, file.path(out_dir, "burn_days_trend.png"), 8, 4)
 }
+
+#' Treatable acres and annual need by landowner group, split WUI / non-WUI
+fig_landowner_bars <- function(burn_units, out_dir) {
+  d <- stats::aggregate(cbind(area_ac, afn_ac) ~ owner + wui, burn_units, sum)
+  d$owner <- factor(d$owner, levels = owner_levels)
+  d$wui <- ifelse(d$wui, "WUI", "non-WUI")
+  p <- ggplot2::ggplot(d, ggplot2::aes(.data$owner, .data$afn_ac / 1000, fill = .data$wui)) +
+    ggplot2::geom_col() +
+    ggplot2::scale_fill_manual(values = c(`non-WUI` = "darkgreen", WUI = "darkorange")) +
+    ggplot2::labs(title = "Annual planned-Rx need by landowner (PAD-US 4.1)",
+                  x = NULL, y = "thousand acres / yr", fill = NULL) +
+    ggplot2::theme_minimal()
+  save_fig(p, file.path(out_dir, "need_by_landowner.png"), 9, 4.5)
+}
+
+#' Modelled vs TWIGS (USFS completed broadcast burns) size distribution
+fig_unit_size_compare <- function(cmp, out_dir) {
+  d <- rbind(data.frame(size_bin = cmp$size_bin, share = cmp$model_share, source = "model (USFS non-WUI)"),
+             data.frame(size_bin = cmp$size_bin, share = cmp$twigs_share, source = "TWIGS completed burns"))
+  p <- ggplot2::ggplot(d, ggplot2::aes(.data$size_bin, .data$share, fill = .data$source)) +
+    ggplot2::geom_col(position = "dodge") +
+    ggplot2::labs(title = "Burn unit sizes: modelled vs past Forest Service burns in NM",
+                  subtitle = "share of acres in each size bin", x = "unit size (ac)",
+                  y = "share of acres", fill = NULL) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
+  save_fig(p, file.path(out_dir, "unit_size_vs_twigs.png"), 9, 4.5)
+}

@@ -2,51 +2,32 @@
 # pipeline runs end to end; parameters are placeholders from
 # config/downstream_params.yml and must be calibrated before use.
 
-#' Size bins clipped to allowed unit-size range
-clip_bins <- function(bins, lo, hi) {
-  b <- bins[bins$max >= lo & bins$min <= hi, ]
-  b$min <- pmax(b$min, lo)
-  b$max <- pmin(b$max, hi)
-  b$unit_ac <- (b$min + b$max) / 2
-  b
-}
-
 #' Unit size x complexity distribution of annual Rx acres
 #'
-#' Schema: project_id, wui (lgl), complexity, size_bin, unit_ac, acres, n_units
-#' Placeholder: AFN split by wui_share and complexity_share, then spread
-#' evenly in acres across allowed size bins (WUI <= wui_max; non-WUI
-#' nonwui_min..nonwui_max).
-unit_size_complexity <- function(rx_target, params) {
-  bins <- do.call(rbind, lapply(params$size_bins, as.data.frame))
-  us <- params$unit_size
-  b_w <- clip_bins(bins, min(bins$min), us$wui_max)
-  b_n <- clip_bins(bins, us$nonwui_min, us$nonwui_max)
+#' Annual need (AFN) is distributed by the real size distribution of burn
+#' units from treatable patches (see R/units.R), by owner group and WUI.
+#' Complexity is a PLACEHOLDER: the same complexity_share applies to every
+#' size bin until the complexity model replaces it.
+#'
+#' Schema: project_id, owner_group, wui (lgl), complexity, size_bin, unit_ac,
+#' acres (annual acres of need), n_units (unit-burns per year)
+unit_size_complexity <- function(burn_units, params) {
   cs <- unlist(params$complexity_share)
-  p <- rx_target[!is.na(rx_target$afn_ac) & rx_target$afn_ac > 0, ]
-  # per-unit WUI share of annual acres of need (from CWiRRZ); fall back to the
-  # config placeholder where it is missing
-  ws <- p$wui_share
-  if (is.null(ws)) ws <- rep(NA_real_, nrow(p))
-  ws[is.na(ws)] <- params$wui_share
-  rows <- list()
-  for (wui in c(TRUE, FALSE)) {
-    b <- if (wui) b_w else b_n
-    share_w <- if (wui) ws else 1 - ws
-    for (cx in names(cs)) {
-      for (j in seq_len(nrow(b))) {
-        ac <- p$afn_ac * share_w * cs[[cx]] / nrow(b)
-        rows[[length(rows) + 1]] <- data.frame(
-          project_id = p$project_id, wui = wui, complexity = cx,
-          size_bin = b$bin[j], unit_ac = b$unit_ac[j], acres = ac,
-          n_units = ac / b$unit_ac[j], stringsAsFactors = FALSE)
-      }
-    }
-  }
+  bu <- burn_units[!is.na(burn_units$afn_ac) & burn_units$afn_ac > 0, ]
+  bu$w <- bu$afn_ac * bu$unit_ac           # for acre-weighted mean unit size
+  g <- stats::aggregate(cbind(afn_ac, w) ~ project_id + owner_group + wui + size_bin,
+                        bu, sum)
+  g$unit_ac <- g$w / g$afn_ac
+  g$size_bin <- as.character(g$size_bin)
+  rows <- lapply(names(cs), function(cx) {
+    data.frame(project_id = g$project_id, owner_group = g$owner_group, wui = g$wui,
+               complexity = cx, size_bin = g$size_bin, unit_ac = g$unit_ac,
+               acres = g$afn_ac * cs[[cx]], n_units = g$afn_ac * cs[[cx]] / g$unit_ac,
+               stringsAsFactors = FALSE)
+  })
   out <- do.call(rbind, rows)
-  out[order(out$project_id, !out$wui, out$complexity, out$unit_ac), ]
+  out[order(out$project_id, out$owner_group, !out$wui, out$complexity, out$unit_ac), ]
 }
-
 #' Firing method for a unit size and complexity
 firing_rule <- function(unit_ac, complexity, heavy_fuel_share, fp) {
   ifelse(unit_ac > fp$heli_min_acres, "heli",
