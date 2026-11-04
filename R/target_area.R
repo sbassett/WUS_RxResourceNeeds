@@ -75,6 +75,43 @@ ensure_wilderness <- function(wcfg) {
   wcfg$path
 }
 
+# Community Wildfire Risk Reduction Zones (CWiRRZ, Dillon et al. 2024,
+# RDS-2024-0030). 10-class 30 m raster, EPSG:5070, values 0-based (checked
+# against the shipped .vat.dbf). WUI (option B) = Direct + Indirect
+# Exposure + all Wildfire Transmission Zone classes (*):
+#   0 Minimal, 1 Indirect*, 2 Direct*, 3 WTZ-Tree*, 4 WTZ-Shrub*, 5 WTZ-Grass*,
+#   6 WTZ-Agriculture*, 7 WTZ-Non-Vegetated*, 8 Outlying Wildlands, 9 Water
+cwirrz_wui_classes <- 1:7
+
+#' Download + unzip the CWiRRZ CONUS raster if missing; returns the .tif path
+#' (or "" when WUI is disabled, so the file target stays valid)
+ensure_cwirrz <- function(wui_cfg) {
+  if (!isTRUE(wui_cfg$enabled)) return(character())
+  if (file.exists(wui_cfg$path)) return(wui_cfg$path)
+  zip <- file.path("data/raw", basename(wui_cfg$url))
+  ensure_dir(dirname(zip))
+  old <- options(timeout = 3600); on.exit(options(old))
+  if (!file.exists(zip)) utils::download.file(wui_cfg$url, zip, mode = "wb")
+  utils::unzip(zip, exdir = sub("\\.zip$", "", zip))
+  if (!file.exists(wui_cfg$path)) stop("CWiRRZ raster not found after unzip: ", wui_cfg$path)
+  wui_cfg$path
+}
+
+#' 0/1 WUI mask (option B classes) aligned to `ref`, or NULL when disabled
+cwirrz_wui_mask <- function(wui_cfg, ref, tmp) {
+  if (!isTRUE(wui_cfg$enabled)) return(NULL)
+  r <- terra::rast(wui_cfg$path)
+  # classify works on the underlying integer codes, not the category labels
+  # classify first (on the native grid), then align; nearest keeps 0/1
+  r <- terra::crop(r, terra::project(terra::as.polygons(terra::ext(ref), crs = terra::crs(ref)),
+                                     terra::crs(r)), snap = "out")
+  m <- terra::classify(r, cbind(cwirrz_wui_classes, 1L), others = 0L)
+  if (terra::compareGeom(m, ref, stopOnError = FALSE)) return(m)
+  terra::project(m, ref, method = "near",
+                 filename = file.path(tmp, "wui_aligned.tif"), overwrite = TRUE,
+                 datatype = "INT1U")
+}
+
 #' Wilderness boundaries reprojected and repaired
 #'
 #' wilderness.net WildernessAreas2024 is in EPSG:3857 and ~3% of polygons are
@@ -238,9 +275,15 @@ build_landfire_derived <- function(fuels_vrt, evt_vrt, bps_vrt, evt_attr, bps_at
   heavy_codes <- waf_table$code[waf_table$heavy_fuel]
   heavy <- terra::classify(fuels[["fbfm40"]], cbind(heavy_codes, 1L), others = 0L)
   treat_na <- terra::mask(treat, treat, maskvalues = 0)   # 1 or NA
+  # WUI: treatable pixels in a Community Wildfire Risk Reduction WUI zone,
+  # and treatable AFN (1/MFRI) in WUI, for an acres-of-need-weighted share
+  wui <- cwirrz_wui_mask(ta_cfg$wui, treat, tmp)
+  if (is.null(wui)) wui <- terra::ifel(is.na(treat), NA, 0L)
   stk <- c(treat, treat * inv_mfri, treat * heavy, fuels[["slope"]] * treat_na,
-           treat_na * terra::ifel(is.na(inv_mfri), 1L, 0L))
-  names(stk) <- c("treat_n", "inv_mfri_sum", "heavy_n", "slope_sum", "no_fri_n")
+           treat_na * terra::ifel(is.na(inv_mfri), 1L, 0L),
+           treat * wui, treat * wui * inv_mfri)
+  names(stk) <- c("treat_n", "inv_mfri_sum", "heavy_n", "slope_sum", "no_fri_n",
+                  "wui_n", "wui_inv_mfri_sum")
   ps <- terra::zonal(stk, proj, fun = "sum", na.rm = TRUE)
   names(ps)[1] <- "project_id"
   pa <- pixel_acres(terra::res(treat)[1])
@@ -250,7 +293,10 @@ build_landfire_derived <- function(fuels_vrt, evt_vrt, bps_vrt, evt_attr, bps_at
     afn_ac = ps$inv_mfri_sum * pa,
     heavy_fuel_share = ifelse(ps$treat_n > 0, ps$heavy_n / ps$treat_n, NA),
     mean_slope_deg = ifelse(ps$treat_n > 0, ps$slope_sum / ps$treat_n, NA),
-    no_fri_share = ifelse(ps$treat_n > 0, ps$no_fri_n / ps$treat_n, NA)
+    no_fri_share = ifelse(ps$treat_n > 0, ps$no_fri_n / ps$treat_n, NA),
+    wui_area_share = ifelse(ps$treat_n > 0, ps$wui_n / ps$treat_n, NA),
+    # share of annual acres of NEED in WUI (weights pixels by 1/MFRI)
+    wui_share = ifelse(ps$inv_mfri_sum > 0, ps$wui_inv_mfri_sum / ps$inv_mfri_sum, NA)
   )
   stats <- merge(sf::st_drop_geometry(projects)[, "project_id", drop = FALSE],
                  stats, by = "project_id", all.x = TRUE)

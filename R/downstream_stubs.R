@@ -24,10 +24,15 @@ unit_size_complexity <- function(rx_target, params) {
   b_n <- clip_bins(bins, us$nonwui_min, us$nonwui_max)
   cs <- unlist(params$complexity_share)
   p <- rx_target[!is.na(rx_target$afn_ac) & rx_target$afn_ac > 0, ]
+  # per-unit WUI share of annual acres of need (from CWiRRZ); fall back to the
+  # config placeholder where it is missing
+  ws <- p$wui_share
+  if (is.null(ws)) ws <- rep(NA_real_, nrow(p))
+  ws[is.na(ws)] <- params$wui_share
   rows <- list()
   for (wui in c(TRUE, FALSE)) {
     b <- if (wui) b_w else b_n
-    share_w <- if (wui) params$wui_share else 1 - params$wui_share
+    share_w <- if (wui) ws else 1 - ws
     for (cx in names(cs)) {
       for (j in seq_len(nrow(b))) {
         ac <- p$afn_ac * share_w * cs[[cx]] / nrow(b)

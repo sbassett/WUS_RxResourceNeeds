@@ -18,8 +18,8 @@ unit_size:
   nonwui_max: 2000
   wui_max: 441
 
-# Share of each project's annual Rx acres in WUI (placeholder until a WUI
-# layer, e.g. wildfirerisk.org Community Wildfire Risk Reduction Zones, is added)
+# Fallback WUI share of annual Rx acres, used only for units where the CWiRRZ
+# per-unit wui_share is missing (see target_area.wui in pipeline.yml).
 wui_share: 0.2
 
 # Complexity mix of annual Rx acres (placeholder until the complexity model)

@@ -15,7 +15,7 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 **Add missing data layers**
 - [x] Exclude designated wilderness from planned Rx (wilderness.net NWPS boundaries, Nov 2024; `target_area.wilderness`).
 - [ ] Decide whether BLM Wilderness Study Areas should also be excluded (needs the BLM WSA layer).
-- [ ] WUI layer (wildfirerisk.org Community Wildfire Risk Reduction Zones) to replace the placeholder `wui_share`.
+- [x] WUI from Community Wildfire Risk Reduction Zones (Direct + Indirect Exposure + all Wildfire Transmission Zone classes); per-unit `wui_share` replaces the statewide placeholder.
 
 **Calibrate downstream stages** (placeholders in `config/downstream_params.yml`)
 - [ ] Unit complexity model: terrain, fuel homogeneity, distance to road, adjacent fuels, WUI.
@@ -65,7 +65,7 @@ Requires R ≥ 4.3 (built with R 4.6.1 on Windows) and internet access for first
 1. Restore packages: `renv::restore()`
 2. LANDFIRE's LFPS v2 API requires an email. Add it to your user `.Renviron`: `LANDFIRE_EMAIL=you@example.org`
 3. Build: `targets::tar_make()` (inspect with `targets::tar_visnetwork()`, read results with `targets::tar_read(rx_target)`)
-4. Test: `Rscript tests/run_tests.R` (229 expectations)
+4. Test: `Rscript tests/run_tests.R` (236 expectations)
 
 All settings live in `config/pipeline.yml`. The config is split into per-section targets, so changing `years` doesn't redo the 30 m LANDFIRE processing. First-time downloads can be run in parallel with `Rscript tools/prefetch_landfire.R fuels 1 2` (and `fuels 2 2`, `evt`, `bps`) and `Rscript tools/prefetch_gridmet.R 1979 2025` after `bbox`/`lf_tiles` are built.
 
@@ -145,6 +145,12 @@ A 30 m pixel is treatable when it is **historical dry forest** (BPS) **and curre
 
 All of this runs at 30 m on a mosaic of 55 LFPS tiles (~673M cells), then aggregates to a treatable fraction per gridMET cell.
 
+### WUI
+- **Source:** Community Wildfire Risk Reduction Zones (CWiRRZ; Dillon et al. 2024, RDS-2024-0030), a 30 m CONUS raster already on the LANDFIRE grid (EPSG:5070). It's downloaded automatically (`target_area.wui`).
+- **Definition:** WUI = Direct Exposure + Indirect Exposure + all five Wildfire Transmission Zone classes (Tree, Shrub, Grass, Agriculture, Non-Vegetated), i.e. raster codes 1–7. Minimal Exposure (0), Outlying Wildlands (8, > 2,400 m from buildings) and Water (9) are not WUI.
+- **Per-unit outputs** (`project_landfire_stats.csv`): `wui_area_share`, the share of treatable acres in WUI, and `wui_share`, the share of annual acres of *need* (AFN, i.e. pixels weighted by 1/MFRI) in WUI. The unit-size stub uses `wui_share`.
+- **Scope:** WUI doesn't change the target area, burn days or AFN. It only affects the downstream stubs (unit sizes, firing method, resources). It's not yet used as a complexity input.
+
 ### Daily classification and rollup
 - **Daily classification:** every pixel, every day: 1 if all enabled thresholds are met, 0 if not, NA if any input is missing (`R/classify.R`).
 - **`rx_share`:** each unit's daily `rx_share` is the share of its treatable area that is in prescription. Cells are weighted by polygon coverage × treatable fraction × cell area (`R/rollup.R`).
@@ -165,7 +171,7 @@ In `R/rx_target.R`:
 
 ### Downstream stubs
 In `R/downstream_stubs.R` and `R/state_rollup.R`, with **placeholder** parameters in `config/downstream_params.yml`:
-- **Unit size × complexity:** AFN is split by WUI share and complexity share, then spread evenly across size bins 50–100 … 1601–2000 ac. Non-WUI units are 441–2,000 ac and WUI units are capped at 441 ac.
+- **Unit size × complexity:** each unit's AFN is split into WUI and non-WUI using its own `wui_share` (see WUI below), then by complexity share, then spread evenly across size bins 50–100 … 1601–2000 ac. Non-WUI units are 441–2,000 ac and WUI units are capped at 441 ac. The config `wui_share` (0.2) is only a fallback where a unit's share is missing.
 - **Firing method:**
   - Units > 1,000 ac use helicopter ignition, which halves hand-firing time.
   - Drones are used for ≥ 200 ac units of low/medium complexity, but not where heavy fuels make up ≥ 50% of the unit.
@@ -185,6 +191,7 @@ The full report is in [`docs/report.md`](docs/report.md).
 | Units with treatable area inside their boundary | 1,140 |
 | Treatable (target) area, designated wilderness excluded | 5.42 M ac (~284k ac of dry forest in wilderness removed) |
 | Annual planned-Rx need (AFN) | ~420,000 ac/yr; median MFRI_eff 13 yr; median BFN 8.1 ac/burn day |
+| Share of need in WUI | 42% statewide (41% of treatable area); per unit median 34%, IQR 4–72%, ranging 0–100% |
 | Units that can host a 441 ac burn day | 881 (they carry 99.5% of AFN); the rest have < 441 treatable ac and never have a burn day |
 | Mean annual burn days per unit (units with burn days) | median 34 (IQR 25–47), interannual CV median 0.38 |
 | Trend in mean annual burn days | +2.1 days/decade (p = 0.05) |
@@ -201,7 +208,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | NFDRS FM | `data/processed/nfdrs/fm1_{year}.tif`, `fm10_{year}.tif` | daily % |
 | Daily in-Rx | `data/processed/burn_days/inrx_{year}.tif` | INT1U: 1 in Rx, 0 out, 255 = NA |
 | Fuels / WAF | `data/processed/landfire/waf_gridmet.tif`, `fuel_by_gridmet_cell.csv` | waf, modal fbfm40, canopy means, sheltered |
-| Target area | `data/processed/landfire/treatable_30m.tif`, `treatable_frac_gridmet.tif`, `project_landfire_stats.csv`, `treatable_bps_codes.csv`, `treatable_evt_codes.csv` | 30 m mask; fraction per cell; per-unit treatable_ac, afn_ac, heavy_fuel_share, mean_slope_deg |
+| Target area | `data/processed/landfire/treatable_30m.tif`, `treatable_frac_gridmet.tif`, `project_landfire_stats.csv`, `treatable_bps_codes.csv`, `treatable_evt_codes.csv` | 30 m mask; fraction per cell; per-unit treatable_ac, afn_ac, heavy_fuel_share, mean_slope_deg, wui_area_share, wui_share |
 | Daily rollup | `data/processed/rx_share_daily.parquet` | project_id, date, rx_share, rx_acres |
 | Synchrony | `data/processed/synchrony_pairs.parquet` | project_a, project_b, jaccard, weekly_cor |
 | Tables | `results/tables/` | annual_burn_days, burn_day_variability, weekly_exceedance, rx_target_afn_bfn, thresholds_applied, and `*_STUB.csv` downstream tables |
@@ -212,7 +219,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 
 | Stage | Status | Notes |
 |---|---|---|
-| Scaffolding (renv, targets, testthat) | Implemented | 229 test expectations |
+| Scaffolding (renv, targets, testthat) | Implemented | 236 test expectations |
 | Swain ST1 thresholds → config | Implemented | verified against extracted ST1 |
 | Study area + subfiresheds | Implemented | |
 | gridMET sourcing | Implemented | OPeNDAP via ncdf4 (climateR not needed) |
@@ -235,7 +242,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 - Mid-flame wind uses Swain's flat 1.5 × 0.4 scaling, so it doesn't account for canopy sheltering. Fuel-based WAFs are available with `wind.method: andrews`.
 - BPS fire regime group can vary by map zone for the same BPS_CODE. The crosswalk makes one decision per BPS_CODE; aspen (I-C/IV-B) and mesic mixed conifer (I-C/III-A) are included everywhere.
 - This is a planned-Rx estimate only. Designated wilderness is excluded, and fire need met by managed wildfire isn't counted. Wilderness Study Areas aren't excluded.
-- WUI isn't sourced yet (the pseudocode cites wildfirerisk.org), so the WUI share is a placeholder.
+- WUI uses the broad CWiRRZ definition (anything within 2,400 m of buildings), so it includes much dry forest near scattered structures. WUI is applied to unit sizes only, not yet to unit complexity or patch delineation.
 - The minimum-patch filter uses GDAL sieve (see run notes). Patches crossing LANDFIRE tile seams are handled on the mosaic.
 - All downstream parameters are placeholders. State need figures show only that the pipeline works.
 
@@ -246,6 +253,8 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | gridMET (Abatzoglou 2013) | https://www.climatologylab.org/gridmet.html |
 | LANDFIRE LF2022 FBFM40, CC, CH, CBH, EVT; LF2020 BPS, SlpD (LFPS v2 via `rlandfire`) | https://www.landfire.gov/ |
 | Fireshed Registry 4th ed. (Evers et al. 2025), RDS-2020-0054-4 | https://doi.org/10.2737/RDS-2020-0054-4 |
+| Community Wildfire Risk Reduction Zones (Dillon et al. 2024), RDS-2024-0030 | https://doi.org/10.2737/RDS-2024-0030 |
+| Designated wilderness (National Wilderness Preservation System, wilderness.net, Nov 2024) | https://www.wilderness.net/GIS/Wilderness_Areas.zip |
 | Swain et al. 2023, Commun Earth Environ 4:340, Table ST1 | https://doi.org/10.1038/s43247-023-00993-1 |
 | Andrews 2012, RMRS-GTR-266 (WAF) | https://www.fs.usda.gov/research/treesearch/40651 |
 | Scott & Burgan 2005, RMRS-GTR-153 (fuel bed depths) | https://www.fs.usda.gov/research/treesearch/9521 |

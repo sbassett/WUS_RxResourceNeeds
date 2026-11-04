@@ -47,6 +47,7 @@ list(
   tar_target(treatable_evt_file, "config/treatable_evt_phys.csv", format = "file"),
   tar_target(wilderness_file, ensure_wilderness(cfg_target_area$wilderness),
              format = "file"),
+  tar_target(cwirrz_file, ensure_cwirrz(cfg_target_area$wui), format = "file"),
 
   # ---- study area and units ------------------------------------------------
   tar_target(state, get_state_boundary(cfg_aoi$state_abbr, cfg_crs)),
@@ -104,7 +105,8 @@ list(
   tar_target(bps_vrt, landfire_vrt(lf_bps_tif, file.path(cfg_landfire$dir, "bps.vrt")),
              format = "file"),
   tar_target(lf_derived,
-             { force(treatable_bps_file); force(treatable_evt_file); force(wilderness_file)
+             { force(treatable_bps_file); force(treatable_evt_file)
+               force(wilderness_file); force(cwirrz_file)
                build_landfire_derived(fuels_vrt, evt_vrt, bps_vrt, evt_attr, bps_attr,
                                       fuels_bands, gm_template_file, projects,
                                       cfg_target_area, waf_table, cfg_waf) }),

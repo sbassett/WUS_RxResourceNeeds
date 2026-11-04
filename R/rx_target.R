@@ -15,7 +15,8 @@ compute_rx_target <- function(project_stats, variability) {
     treatable_ac = d$treatable_ac,
     afn_ac = ifelse(d$treatable_ac > 0, d$afn_ac, 0),
     mfri_eff_yr = safe_div(d$treatable_ac, d$afn_ac),
-    bd_mean = d$mean_bd, bd_poor = d$p25_bd, bd_good = d$p75_bd
+    bd_mean = d$mean_bd, bd_poor = d$p25_bd, bd_good = d$p75_bd,
+    wui_share = if (is.null(d$wui_share)) NA_real_ else d$wui_share
   )
   out$bfn_typical = safe_div(out$afn_ac, out$bd_mean)
   out$bfn_poor = safe_div(out$afn_ac, out$bd_poor)

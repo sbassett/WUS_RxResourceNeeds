@@ -99,6 +99,14 @@ target_area:
   min_patch:
     enabled: true
     acres: 20
+  # WUI: Community Wildfire Risk Reduction Zones (CWiRRZ, Dillon et al. 2024,
+  # RDS-2024-0030). WUI = Direct + Indirect Exposure + all Wildfire
+  # Transmission Zone classes (raster values 2-8). Sets each unit's WUI share
+  # of Rx need; WUI acres go into small (<= wui_max) burn units downstream.
+  wui:
+    enabled: true
+    url: "https://www.fs.usda.gov/rds/archive/products/RDS-2024-0030/RDS-2024-0030_Data_CONUS.zip"
+    path: "data/raw/RDS-2024-0030_Data_CONUS/Data/CONUS/CWiRRZ_CONUS.tif"
   out_dir: "data/processed/landfire"
 
 # Burn-day classification output
