@@ -6,6 +6,7 @@ Modeling the resources (personnel, quals, and equipment) needed to restore low-i
 ## To do
 
 **Review modeling decisions**
+- [ ] **Choose the live fuel moisture scenario for rate of spread** (`fire_behavior.live_default`, currently L4 = green herbaceous, 120%/150%). It changes the hot-end area-weighted rate of spread about eight-fold (L1 cured 79, L2 54, L3 30, L4 10 chains/hr), because 55% of treatable area is in grass or grass-shrub fuel models. Spring and fall Rx windows in NM dry forest usually have cured herbaceous fuels (L1/L2); monsoon-season windows are green (L4). A season-dependent choice (cured outside the monsoon) is possible using burn-day timing.
 - [x] Replace EVT name patterns with reviewed BPS/EVT crosswalks (`config/treatable_bps.csv`, `config/treatable_evt_phys.csv`).
 - [x] Spot-check the 13 treatable BPS classes and the excluded forest classes in `config/treatable_bps.csv` (e.g. aspen and mesic mixed conifer, whose FRG varies by map zone).
 - [x] Use Swain ST1 Forest Plans thresholds for now (`thresholds.plan_set: forest`). Possible later refinements: sensitivity runs with `all`/`nonforest`, vegetation-dependent thresholds (forest bounds on tree pixels, non-forest on current shrub/grass), or NM-only medians from Swain's burn-plan repository.
@@ -27,10 +28,10 @@ Data and method decisions so far:
 
 To do:
 - [x] Unit sizes from real treatable patches, split by landowner (PAD-US 4.1) and WUI, with TWIGS comparison. Each patch pool is split into equal units under the size cap. **Next:** replace equal splitting with a true size *distribution* — TWIGS shows NM burns have a long small-burn tail (median 97 ac) plus large burns (71% of acres in units > 2000 ac) that equal splitting can't reproduce.
-- [ ] Split patches by fire behavior as well as landowner and WUI (needs the fire-behavior step).
-- [ ] Fire behavior: rate of spread (chains/hr) under cool and hot in-prescription weather, from the in-prescription days already in the pipeline.
+- [ ] Split patches by flame length class as well as landowner and WUI (patches now carry acres by flame length class, but are not yet split by it).
+- [x] Fire behavior: rate of spread and flame length under cool, mid and hot prescription conditions, modelled aspatially (Rothermel) and joined to the fuel model map. **Next:** decide the live moisture scenario (above); optionally add a season-dependent version.
 - [ ] Unit complexity model: rate of spread, slope, aspect and fuel homogeneity, distance to OpenStreetMap roads, adjacent fuels, WUI; recommend low/medium/high cutoffs.
-- [ ] Line production (chains/hr) under hot- and cool-side prescription conditions, and use it in the resource mix (it is computed but not yet used).
+- [ ] Line production (chains/hr): rate of spread by patch is now available (head fire, cool and hot); turn it into line production needed and use it in the resource mix (the stub value is computed but not yet used).
 - [ ] Firing method rules for hand, drone, and heli ignition (currently a simple placeholder model; hand crews do up to about 200 ac/day).
 - [ ] Explore firing production per firing crew member (and the right terminology for it) in more detail later; for now a simple placeholder firing production model is used.
 - [ ] Resources per unit-day across firing, holding, and contingency (needs real burn plans or expert input).
@@ -78,7 +79,7 @@ Requires R ≥ 4.3 (built with R 4.6.1 on Windows) and internet access for first
 1. Restore packages: `renv::restore()`
 2. LANDFIRE's LFPS v2 API requires an email. Add it to your user `.Renviron`: `LANDFIRE_EMAIL=you@example.org`
 3. Build: `targets::tar_make()` (inspect with `targets::tar_visnetwork()`, read results with `targets::tar_read(rx_target)`)
-4. Test: `Rscript tests/run_tests.R` (260 expectations)
+4. Test: `Rscript tests/run_tests.R` (292 expectations)
 
 All settings live in `config/pipeline.yml`. The config is split into per-section targets, so changing `years` doesn't redo the 30 m LANDFIRE processing. First-time downloads can be run in parallel with `Rscript tools/prefetch_landfire.R fuels 1 2` (and `fuels 2 2`, `evt`, `bps`) and `Rscript tools/prefetch_gridmet.R 1979 2025` after `bbox`/`lf_tiles` are built.
 
@@ -187,6 +188,14 @@ In `R/rx_target.R`:
 - **AFN** = Σ over treatable 30 m pixels of pixel area / BPS `FRI_ALLFIR`. This is TA / MFRI_eff, where MFRI_eff is the area-weighted harmonic mean.
 - **BFN** = AFN / burn days, for typical (mean), poor (25th percentile) and good (75th percentile) burn-day years.
 
+### Rate of spread and flame length
+- **Aspatial first:** Rothermel (1972) surface head fire spread is calculated once per fuel model, scenario, live-moisture scenario and slope (`R/rothermel.R`), giving a small lookup table (40 burnable Scott & Burgan models × 3 scenarios × 4 live scenarios × 6 slopes = 2,880 rows, `results/tables/rate_of_spread_lookup.csv`). It then joins to the 30 m fuel model (FBFM40) and slope maps (`R/fire_behavior.R`).
+- **Engine:** the `Rothermel` R package (Rothermel 1972 with Albini 1976 and Andrews et al. 2013 corrections, Scott & Burgan 2005 fuel models). Flame length comes from Byram (1959) using the package's reaction intensity.
+- **Scenarios** come straight from the burn-day thresholds (Forest Plans): *cool* = wettest dead fuels (1-hr 12%, 10-hr 14%, 100-hr 15%) and no wind; *hot* = driest fuels (4%, 6%, 7.5%) and the wind cap (4.5 m/s mid-flame, 16.2 km/h); *mid* = midpoints.
+- **Live moisture** is a separate choice (`fire_behavior.live_scenarios`, Scott & Burgan L1 cured to L4 green) and is the dominant uncertainty; see the to-do list and limitations.
+- **Slope:** slope and wind interact in Rothermel (slope adds to the wind term), so slope is not a separable multiplier. The lookup is therefore built at slope bins of 0–25% (the treatable area is limited to ≤ 25%) and interpolated linearly per pixel.
+- **Validation:** against the SW Coordination Center reference tables for Anderson fuel model 1, rate of spread agrees within about 4–5% (flat and 30% slope) wherever the traditional wind limit does not bind, and flame length within about 3% (tests in `tests/testthat/test-rothermel.R`). Where that older limit binds, the package gives higher rates because it applies the Andrews et al. (2013) wind limit.
+- **Outputs:** `data/processed/fire_behavior/rx_fire_behavior_30m.tif` (layers `ros_cool`, `ros_hot` in chains/hr and `fl_cool`, `fl_hot` in feet, treatable cells only) and, per treatable patch, the area-weighted means, modal fuel model, and acres by flame length class (0–4, 4–8, > 8 ft).
 ### Downstream stubs
 In `R/downstream_stubs.R` and `R/state_rollup.R`, with **placeholder** parameters in `config/downstream_params.yml`:
 - **Unit size:** treatable area is cut into contiguous patches sharing a subfireshed and a landowner class (`R/patches.R`), then each patch's WUI and non-WUI acres are split into equal burn units under the size caps (WUI ≤ 441 ac; non-WUI ≤ `nonwui_split_ac`, default 1,000 ac). This is calibrated against past NM burns from TWIGS. Patch totals are checked against the LANDFIRE per-subfireshed totals. The complexity split is still a placeholder `complexity_share` applied to every size bin.
@@ -212,6 +221,10 @@ The full report is in [`docs/report.md`](docs/report.md).
 | Share of need in WUI | 42% statewide (41% of treatable area); per unit median 34%, IQR 4–72%, ranging 0–100% |
 | Annual need by landowner (PAD-US 4.1) | Federal 51% (USFS 176k, BLM 32k ac/yr), Private 45% (~189k ac/yr), State/Local 4% |
 | Burn units / yr | ~62,000 unit-burns from ~53,000 treatable patches |
+| Treatable fuels | Grass or grass-shrub models cover ~55% of treatable area (GR2 28%, GS2 20%, GR1 5%, GS1 2%); timber-understory TU5 21%, timber litter TL8 14% |
+| Rate of spread, live scenario L4 (area-weighted) | cool 0.3 chains/hr (flames 0.6 ft); hot 10.5 chains/hr (flames 3.4 ft) |
+| Flame length under hot conditions (L4) | 67% of treatable area 0-4 ft, 17% 4-8 ft, 17% > 8 ft; under cool conditions all < 4 ft |
+| Sensitivity of hot-end rate of spread to live moisture | L1 cured 79, L2 54, L3 30, L4 green 10 chains/hr (flames 9, 7.8, 6.0, 3.7 ft) |
 | Units that can host a 441 ac burn day | 881 (they carry 99.5% of AFN); the rest have < 441 treatable ac and never have a burn day |
 | Mean annual burn days per unit (units with burn days) | median 34 (IQR 25–47), interannual CV median 0.38 |
 | Trend in mean annual burn days | +2.1 days/decade (p = 0.05) |
@@ -229,6 +242,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | Daily in-Rx | `data/processed/burn_days/inrx_{year}.tif` | INT1U: 1 in Rx, 0 out, 255 = NA |
 | Fuels / WAF | `data/processed/landfire/waf_gridmet.tif`, `fuel_by_gridmet_cell.csv` | waf, modal fbfm40, canopy means, sheltered |
 | Target area | `data/processed/landfire/treatable_30m.tif`, `treatable_frac_gridmet.tif`, `project_landfire_stats.csv`, `treatable_bps_codes.csv`, `treatable_evt_codes.csv` | 30 m mask; fraction per cell; per-unit treatable_ac, afn_ac, heavy_fuel_share, mean_slope_deg, wui_area_share, wui_share |
+| Fire behavior | `data/processed/fire_behavior/rx_fire_behavior_30m.tif`; tables `rate_of_spread_lookup.csv`, `flame_length_class_acres.csv` | 30 m ros_cool, ros_hot (chains/hr), fl_cool, fl_hot (ft); lookup by fuel model, scenario, live scenario, slope |
 | Daily rollup | `data/processed/rx_share_daily.parquet` | project_id, date, rx_share, rx_acres |
 | Synchrony | `data/processed/synchrony_pairs.parquet` | project_a, project_b, jaccard, weekly_cor |
 | Tables | `results/tables/` | annual_burn_days, burn_day_variability, weekly_exceedance, rx_target_afn_bfn, thresholds_applied, and `*_STUB.csv` downstream tables |
@@ -239,7 +253,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 
 | Stage | Status | Notes |
 |---|---|---|
-| Scaffolding (renv, targets, testthat) | Implemented | 260 test expectations |
+| Scaffolding (renv, targets, testthat) | Implemented | 292 test expectations |
 | Swain ST1 thresholds → config | Implemented | verified against extracted ST1 |
 | Study area + subfiresheds | Implemented | |
 | gridMET sourcing | Implemented | OPeNDAP via ncdf4 (climateR not needed) |
@@ -252,6 +266,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | Full 1979–2025 run | Done | see docs/run_notes.md |
 | Annual Rx target (AFN/BFN) | Implemented | |
 | Unit size + landowner from patches | Implemented | PAD-US 4.1 owners; equal-split units; TWIGS comparison |
+| Rate of spread + flame length (Rothermel) | Implemented | aspatial lookup joined to FBFM40 and slope; validated against published tables; live moisture choice pending |
 | Unit complexity, firing, line production, resource mix | **Stub** | placeholder parameters |
 | State rollup + report | **Stub** (logic implemented, inputs placeholder) | docs/report.md (knitr; Quarto not installed) |
 
@@ -265,6 +280,9 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 - This is a planned-Rx estimate only. Designated wilderness is excluded, and fire need met by managed wildfire isn't counted. Wilderness Study Areas aren't excluded.
 - WUI uses the broad CWiRRZ definition (anything within 2,400 m of buildings), so it includes much dry forest near scattered structures. WUI is applied to unit sizes only, not yet to unit complexity or patch delineation.
 - The minimum-patch filter uses GDAL sieve (see run notes). Patches crossing LANDFIRE tile seams are handled on the mosaic.
+- Rate of spread is Rothermel surface **head fire** spread. Prescribed fire is usually ignited as backing, flanking or strip head fires, so this measures fire potential and containment demand, not how fast a firing crew lays down fire. It ignores crown fire and spotting, and assumes wind blows upslope.
+- Rate of spread depends strongly on the live moisture scenario (see the to-do). With the default green scenario, grass and grass-shrub fuels spread slowly; cured fuels spread an order of magnitude faster.
+- The Rothermel package applies the Andrews et al. (2013) wind limit, so for the fastest fuels at the hot end its rates can exceed BehavePlus results that use the traditional limit.
 - All downstream parameters are placeholders. State need figures show only that the pipeline works.
 
 ## Data sources
@@ -281,5 +299,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | Swain et al. 2023, Commun Earth Environ 4:340, Table ST1 | https://doi.org/10.1038/s43247-023-00993-1 |
 | Andrews 2012, RMRS-GTR-266 (WAF) | https://www.fs.usda.gov/research/treesearch/40651 |
 | Scott & Burgan 2005, RMRS-GTR-153 (fuel bed depths) | https://www.fs.usda.gov/research/treesearch/9521 |
+| Rothermel 1972, INT-115 (surface fire spread), via the `Rothermel` R package (Vacchiano & Ascoli) | https://doi.org/10.2737/INT-RP-115 |
+| SW Coordination Center fire behavior reference tables, fuel model 1 (validation) | https://gacc.nifc.gov/swcc/predictive/outlooks/fire_behavior/reference_tables/documents/fm_1.htm |
 | Cohen & Deeming 1985, PSW-GTR-82 (NFDRS) | https://www.fs.usda.gov/research/treesearch/27315 |
 | State boundary (Census cartographic, via `tigris`) | https://www.census.gov/geographies/mapping-files.html |

@@ -38,6 +38,7 @@ list(
   tar_target(cfg_results, cfg$results),
   tar_target(cfg_landowner, cfg$landowner),
   tar_target(cfg_twigs, cfg$twigs),
+  tar_target(cfg_fire_behavior, cfg$fire_behavior),
   tar_target(st1_file, "config/swain2023_ST1.csv", format = "file"),
   tar_target(thr_file, "config/burn_thresholds.yml", format = "file"),
   tar_target(thresholds, load_thresholds(thr_file, cfg_thresholds$plan_set)),
@@ -134,12 +135,22 @@ list(
                               file.path(cfg_landowner$out_dir, "wui_30m.tif"),
                               file.path(cfg_landowner$out_dir, "tmp")),
              format = "file"),
+  # rate of spread / flame length: aspatial Rothermel lookup, then joined to the
+  # 30 m fuel model and slope maps
+  tar_target(fb_lookup, rothermel_lookup(thresholds, waf_table, cfg_fire_behavior)),
+  tar_target(fb_raster_file,
+             rx_fire_behavior_raster(fuels_vrt, fuels_bands, treatable_30m_file, fb_lookup,
+                                     cfg_fire_behavior,
+                                     file.path(cfg_fire_behavior$out_dir, "rx_fire_behavior_30m.tif")),
+             format = "file"),
   tar_target(patches,
              build_patches(projects[projects$project_id %in%
                                       project_stats$project_id[project_stats$treatable_ac > 0], ],
                            treatable_30m_file, landowner_file, wui_30m_file,
-                           bps_vrt, bps_attr),
+                           bps_vrt, bps_attr, fb_file = fb_raster_file,
+                           fuels_vrt = fuels_vrt, fbfm_layer = match("fbfm40", fuels_bands)),
              format = "parquet"),
+  tar_target(flame_classes, flame_class_summary(patches)),
   tar_target(patch_check, check_patches(patches, project_stats)),
   tar_target(burn_units, { force(patch_check); build_burn_units(patches, params) },
              format = "parquet"),
@@ -205,7 +216,9 @@ list(
       write_table_csv(state_summary$peak_season, d, "state_peak_season_STUB.csv"),
       write_table_csv(thresholds, d, "thresholds_applied.csv"),
       write_table_csv(unit_sizes, d, "burn_unit_size_distribution.csv"),
-      write_table_csv(size_compare, d, "unit_size_vs_twigs_usfs.csv"))
+      write_table_csv(size_compare, d, "unit_size_vs_twigs_usfs.csv"),
+      write_table_csv(fb_lookup, d, "rate_of_spread_lookup.csv"),
+      write_table_csv(flame_classes, d, "flame_length_class_acres.csv"))
   }, format = "file"),
 
   # ---- figures -------------------------------------------------------------
@@ -242,7 +255,11 @@ list(
       fig_synchrony(synchrony, projects, o),
       fig_state_weekly(state_summary$weekly, o),
       fig_landowner_bars(burn_units, o),
-      fig_unit_size_compare(size_compare, o))
+      fig_unit_size_compare(size_compare, o),
+      fig_fb_lookup(fb_lookup, cfg_fire_behavior$live_default, o),
+      fig_fb_live_sensitivity(fb_lookup, o),
+      fig_ros_choropleth(projects, patches, o),
+      fig_flame_classes(flame_classes, o))
   }, format = "file"),
 
   # ---- report ----------------------------------------------------------------

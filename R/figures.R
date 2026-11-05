@@ -233,3 +233,72 @@ fig_unit_size_compare <- function(cmp, out_dir) {
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1))
   save_fig(p, file.path(out_dir, "unit_size_vs_twigs.png"), 9, 4.5)
 }
+
+#' Rate of spread by fuel model under cool / mid / hot prescription conditions
+fig_fb_lookup <- function(lookup, live, out_dir) {
+  d <- lookup[lookup$live == live & lookup$slope_pct == 0, ]
+  d$model <- factor(d$model, levels = unique(d$model[order(d$code)]))
+  d$scenario <- factor(d$scenario, levels = c("cool", "mid", "hot"))
+  p <- ggplot2::ggplot(d, ggplot2::aes(.data$model, .data$ros_chhr, fill = .data$scenario)) +
+    ggplot2::geom_col(position = "dodge") +
+    ggplot2::scale_y_continuous(trans = scales::pseudo_log_trans(base = 10),
+                                breaks = c(0, 1, 10, 100, 1000)) +
+    ggplot2::scale_fill_manual(values = c(cool = "steelblue", mid = "goldenrod", hot = "firebrick")) +
+    ggplot2::labs(title = sprintf("Rate of spread under prescription conditions (flat, live moisture %s)", live),
+                  subtitle = "cool = wettest fuels, no wind; hot = driest fuels, highest wind in the prescription window",
+                  x = "fuel model", y = "chains / hr (pseudo-log scale)", fill = NULL) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1))
+  save_fig(p, file.path(out_dir, "rate_of_spread_by_fuel_model.png"), 11, 5)
+}
+
+#' How much the live fuel moisture assumption changes hot-end rate of spread
+fig_fb_live_sensitivity <- function(lookup, out_dir) {
+  d <- lookup[lookup$scenario == "hot" & lookup$slope_pct == 0, ]
+  d$model <- factor(d$model, levels = unique(d$model[order(d$code)]))
+  d$herb <- c(L1 = "L1 herb cured (30 %)", L2 = "L2 (60 %)", L3 = "L3 (90 %)",
+              L4 = "L4 herb green (120 %)")[d$live]
+  p <- ggplot2::ggplot(d, ggplot2::aes(.data$model, .data$ros_chhr, color = .data$herb,
+                                       group = .data$herb)) +
+    ggplot2::geom_point(size = 2) + ggplot2::geom_line(linewidth = 0.3) +
+    ggplot2::scale_y_continuous(trans = scales::pseudo_log_trans(base = 10),
+                                breaks = c(0, 1, 10, 100, 1000)) +
+    ggplot2::scale_color_viridis_d(direction = -1) +
+    ggplot2::labs(title = "Hot-end rate of spread depends on live fuel moisture",
+                  subtitle = "grass, grass-shrub and shrub models are most sensitive; timber litter and slash are not",
+                  x = "fuel model", y = "chains / hr (pseudo-log scale)", color = "live herbaceous moisture") +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 60, hjust = 1))
+  save_fig(p, file.path(out_dir, "rate_of_spread_live_moisture_sensitivity.png"), 11, 5)
+}
+
+#' Area-weighted mean of a patch column per subfireshed
+project_patch_mean <- function(patches, col) {
+  d <- patches[!is.na(patches[[col]]), ]
+  num <- tapply(d[[col]] * d$area_ac, d$project_id, sum)
+  den <- tapply(d$area_ac, d$project_id, sum)
+  data.frame(project_id = as.integer(names(num)), value = as.numeric(num / den))
+}
+
+fig_ros_choropleth <- function(projects, patches, out_dir) {
+  c(fig_project_choropleth(projects, setNames(project_patch_mean(patches, "ros_hot_chhr"),
+                                              c("project_id", "ros_hot")), "ros_hot",
+                           "Hot-end rate of spread (area-weighted, treatable area)", "chains/hr",
+                           file.path(out_dir, "ros_hot_by_subfireshed.png"), "log10"),
+    fig_project_choropleth(projects, setNames(project_patch_mean(patches, "ros_cool_chhr"),
+                                              c("project_id", "ros_cool")), "ros_cool",
+                           "Cool-end rate of spread (area-weighted, treatable area)", "chains/hr",
+                           file.path(out_dir, "ros_cool_by_subfireshed.png"), "log10"))
+}
+
+fig_flame_classes <- function(summary, out_dir) {
+  s <- stats::aggregate(acres ~ scenario + flame_class, summary, sum)
+  s$scenario <- factor(s$scenario, levels = c("cool", "hot"))
+  p <- ggplot2::ggplot(s, ggplot2::aes(.data$scenario, .data$acres / 1e6, fill = .data$flame_class)) +
+    ggplot2::geom_col() +
+    ggplot2::scale_fill_manual(values = c(`0-4 ft` = "#2c7bb6", `4-8 ft` = "#fdae61", `> 8 ft` = "#d7191c")) +
+    ggplot2::labs(title = "Treatable area by flame length class under prescription conditions",
+                  x = NULL, y = "million acres", fill = "flame length") +
+    ggplot2::theme_minimal()
+  save_fig(p, file.path(out_dir, "flame_length_classes.png"), 6, 4.5)
+}

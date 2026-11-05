@@ -118,6 +118,24 @@ landowner:
   cache_dir: "data/raw/padus"
   out_dir: "data/processed/landowner"
 
+# Rate of spread / flame length under prescription conditions (Rothermel 1972
+# via the `Rothermel` package, Scott & Burgan 2005 fuel models). Computed once
+# per fuel model x scenario x live-moisture scenario x slope, then joined to
+# the 30 m fuel model map. Dead fuel moisture and mid-flame wind come from the
+# burn-day thresholds: cool = wettest fuels and lowest wind, hot = driest
+# fuels and highest wind, mid = midpoints.
+fire_behavior:
+  slopes_pct: [0, 5, 10, 15, 20, 25]   # treatable area is limited to <= 25 % slope
+  # Live fuel moisture scenarios (Scott & Burgan 2005): herbaceous / woody (%).
+  # This choice dominates grass, grass-shrub and shrub fuel models (see README).
+  live_scenarios:
+    L1: {herb: 30,  woody: 60}      # herbaceous fully cured
+    L2: {herb: 60,  woody: 90}
+    L3: {herb: 90,  woody: 120}
+    L4: {herb: 120, woody: 150}     # herbaceous green / uncured
+  live_default: "L4"                # scenario used for maps and patch summaries
+  out_dir: "data/processed/fire_behavior"
+
 # Past burns for comparison: TWIGS Treatment Index (attributes only).
 # New Mexico broadcast burning records are Forest Service only.
 twigs:

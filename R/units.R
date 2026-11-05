@@ -40,6 +40,9 @@ build_burn_units <- function(patches, params) {
   non_ac <- pmax(patches$area_ac - wui_ac, 0)
   afn_w <- ifelse(patches$area_ac > 0, patches$afn_ac * wui_ac / patches$area_ac, 0)
   afn_n <- patches$afn_ac - afn_w
+  # patch-level fire behavior columns (if present) are carried to both pools
+  carry <- intersect(c("ros_cool_chhr", "ros_hot_chhr", "flame_cool_ft", "flame_hot_ft",
+                       "burnable_share", "modal_fbfm"), names(patches))
   mk <- function(area, afn, wui, cap) {
     s <- split_pool(area, cap)
     keep <- s$n_units > 0
@@ -47,6 +50,7 @@ build_burn_units <- function(patches, params) {
                     owner = patches$owner, owner_group = patches$owner_group,
                     wui = wui, n_units = s$n_units, unit_ac = s$unit_ac,
                     area_ac = area, afn_ac = afn)
+    if (length(carry)) d <- cbind(d, patches[carry])
     d[keep, ]
   }
   x <- rbind(mk(wui_ac, afn_w, TRUE, us$wui_max),

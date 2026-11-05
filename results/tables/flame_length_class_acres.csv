@@ -1,0 +1,19 @@
+"owner_group","scenario","flame_class","acres"
+"Federal","cool","0-4 ft",2845208.650415
+"Federal","cool","4-8 ft",0
+"Federal","cool","> 8 ft",0
+"Federal","hot","0-4 ft",1894949.95610744
+"Federal","hot","4-8 ft",498610.128303819
+"Federal","hot","> 8 ft",451648.566003744
+"Private/Other","cool","0-4 ft",2363193.8477146
+"Private/Other","cool","4-8 ft",0
+"Private/Other","cool","> 8 ft",0
+"Private/Other","hot","0-4 ft",1557741.99576406
+"Private/Other","hot","4-8 ft",387712.272497548
+"Private/Other","hot","> 8 ft",417739.579452988
+"State/Local","cool","0-4 ft",205542.429278155
+"State/Local","cool","4-8 ft",0
+"State/Local","cool","> 8 ft",0
+"State/Local","hot","0-4 ft",160461.882562884
+"State/Local","hot","4-8 ft",17186.0063072743
+"State/Local","hot","> 8 ft",27894.5404079973

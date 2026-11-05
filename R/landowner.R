@@ -54,6 +54,15 @@ classify_owner <- function(own_type, own_name, mang_name) {
 
 owner_code <- function(owner) match(owner, owner_levels)
 
+#' Keep polygon parts only (drops points/lines from geometry collections) and
+#' empty geometries; leaves pure polygon layers untouched
+polygons_only <- function(x) {
+  types <- as.character(sf::st_geometry_type(x))
+  if (!all(types %in% c("POLYGON", "MULTIPOLYGON"))) {
+    x <- sf::st_collection_extract(x, "POLYGON", warn = FALSE)
+  }
+  x[!sf::st_is_empty(x), ]
+}
 #' Page through the PAD-US Fee service for a lon/lat bbox; returns an sf
 #' object in EPSG:5070 with owner / owner_group columns
 fetch_padus_fee <- function(bbox, lcfg, crs = 5070) {
@@ -84,8 +93,7 @@ fetch_padus_fee <- function(bbox, lcfg, crs = 5070) {
   x <- do.call(rbind, out)
   x <- sf::st_set_crs(x, crs)
   x <- sf::st_make_valid(x)
-  x <- sf::st_collection_extract(x, "POLYGON", warn = FALSE)
-  x <- x[!sf::st_is_empty(x), ]
+  x <- polygons_only(x)
   x$owner <- classify_owner(x$Own_Type, x$Own_Name, x$Mang_Name)
   x$owner_group <- unname(owner_groups[x$owner])
   x
@@ -105,8 +113,7 @@ padus_fee_file <- function(bbox, lcfg, crs = 5070) {
 #' Rasterize owner codes onto `ref`; unmapped cells become Private.
 #' Larger parcels are painted first so small inholdings win overlaps.
 rasterize_owner <- function(fee, ref, filename = "") {
-  fee <- sf::st_collection_extract(fee, "POLYGON", warn = FALSE)
-  fee <- fee[!sf::st_is_empty(fee), ]
+  fee <- polygons_only(fee)
   fee <- fee[order(-as.numeric(sf::st_area(fee))), ]
   fee$code <- owner_code(fee$owner)
   v <- terra::vect(fee)
