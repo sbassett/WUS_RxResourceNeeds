@@ -1,19 +1,19 @@
 "owner_group","scenario","flame_class","acres"
-"Federal","cool","0-4 ft",2845208.650415
-"Federal","cool","4-8 ft",0
+"Federal","cool","0-4 ft",2845204.42491298
+"Federal","cool","4-8 ft",4.22550202308853
 "Federal","cool","> 8 ft",0
-"Federal","hot","0-4 ft",1894949.95610744
-"Federal","hot","4-8 ft",498610.128303819
-"Federal","hot","> 8 ft",451648.566003744
-"Private/Other","cool","0-4 ft",2363193.8477146
-"Private/Other","cool","4-8 ft",0
+"Federal","hot","0-4 ft",466091.109523817
+"Federal","hot","4-8 ft",1378576.92927277
+"Federal","hot","> 8 ft",1000540.61161841
+"Private/Other","cool","0-4 ft",2363192.51334554
+"Private/Other","cool","4-8 ft",1.33436905992269
 "Private/Other","cool","> 8 ft",0
-"Private/Other","hot","0-4 ft",1557741.99576406
-"Private/Other","hot","4-8 ft",387712.272497548
-"Private/Other","hot","> 8 ft",417739.579452988
+"Private/Other","hot","0-4 ft",361393.399554476
+"Private/Other","hot","4-8 ft",998136.968151806
+"Private/Other","hot","> 8 ft",1003663.48000832
 "State/Local","cool","0-4 ft",205542.429278155
 "State/Local","cool","4-8 ft",0
 "State/Local","cool","> 8 ft",0
-"State/Local","hot","0-4 ft",160461.882562884
-"State/Local","hot","4-8 ft",17186.0063072743
-"State/Local","hot","> 8 ft",27894.5404079973
+"State/Local","hot","0-4 ft",40970.0228261797
+"State/Local","hot","4-8 ft",94642.5719182935
+"State/Local","hot","> 8 ft",69929.8345336819

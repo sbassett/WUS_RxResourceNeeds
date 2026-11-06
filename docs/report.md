@@ -11,7 +11,7 @@ output: github_document
 
 Years: **1979–2025**. Units: **3157** Fireshed Registry subfiresheds intersecting NM. Thresholds: Swain et al. 2023 ST1, forest plans. Unit burn day: in-prescription treatable area ≥ 441 ac.
 
-Generated 2026-11-05 13:41.
+Generated 2026-11-05 16:41.
 
 ## Thresholds applied
 

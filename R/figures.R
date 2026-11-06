@@ -302,3 +302,22 @@ fig_flame_classes <- function(summary, out_dir) {
     ggplot2::theme_minimal()
   save_fig(p, file.path(out_dir, "flame_length_classes.png"), 6, 4.5)
 }
+
+#' Modelled burn days vs observed (TWIGS) burned acres by month
+fig_burn_season <- function(cmp, out_dir) {
+  d <- rbind(
+    data.frame(month = cmp$month, share = cmp$modeled_share,
+               source = "modelled burn days (weighted by need)"),
+    data.frame(month = cmp$month, share = cmp$observed_acre_share,
+               source = "observed burned acres (TWIGS, Forest Service)"))
+  p <- ggplot2::ggplot(d, ggplot2::aes(factor(.data$month, labels = month.abb), .data$share,
+                                       fill = .data$source)) +
+    ggplot2::geom_col(position = "dodge") +
+    ggplot2::scale_y_continuous(labels = function(x) paste0(round(100 * x), "%")) +
+    ggplot2::scale_fill_manual(values = c("steelblue", "darkorange")) +
+    ggplot2::labs(title = "When burn windows occur in the model vs when New Mexico burns happened",
+                  subtitle = "model puts many burn days in the monsoon (Jul-Sep); actual burning is concentrated in Apr-Jun and Oct-Nov",
+                  x = NULL, y = "share of year", fill = NULL) +
+    ggplot2::theme_minimal() + ggplot2::theme(legend.position = "bottom")
+  save_fig(p, file.path(out_dir, "burn_season_modeled_vs_observed.png"), 9.5, 4.8)
+}

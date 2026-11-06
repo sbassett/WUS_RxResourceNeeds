@@ -198,6 +198,9 @@ list(
   tar_target(fire_matrix, firing_matrix(params)),
   tar_target(resources, resource_mix(units_fired, params)),
   tar_target(state_demand, daily_state_demand(burn_matrix, resources, rx_target)),
+  # timing of modelled burn days vs actual Forest Service burns (TWIGS)
+  tar_target(season_compare, burn_season_compare(daily, rx_target, cfg_rollup, twigs)),
+  tar_target(season_summary, burn_season_summary(season_compare)),
   tar_target(state_summary, summarise_state_demand(state_demand, burn_matrix,
                                                    cfg_rollup$n_weeks)),
 
@@ -218,7 +221,9 @@ list(
       write_table_csv(unit_sizes, d, "burn_unit_size_distribution.csv"),
       write_table_csv(size_compare, d, "unit_size_vs_twigs_usfs.csv"),
       write_table_csv(fb_lookup, d, "rate_of_spread_lookup.csv"),
-      write_table_csv(flame_classes, d, "flame_length_class_acres.csv"))
+      write_table_csv(flame_classes, d, "flame_length_class_acres.csv"),
+      write_table_csv(season_compare, d, "burn_season_modeled_vs_observed_by_month.csv"),
+      write_table_csv(season_summary, d, "burn_season_modeled_vs_observed_by_season.csv"))
   }, format = "file"),
 
   # ---- figures -------------------------------------------------------------
@@ -259,7 +264,8 @@ list(
       fig_fb_lookup(fb_lookup, cfg_fire_behavior$live_default, o),
       fig_fb_live_sensitivity(fb_lookup, o),
       fig_ros_choropleth(projects, patches, o),
-      fig_flame_classes(flame_classes, o))
+      fig_flame_classes(flame_classes, o),
+      fig_burn_season(season_compare, o))
   }, format = "file"),
 
   # ---- report ----------------------------------------------------------------

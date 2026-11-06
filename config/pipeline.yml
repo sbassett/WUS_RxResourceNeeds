@@ -133,7 +133,12 @@ fire_behavior:
     L2: {herb: 60,  woody: 90}
     L3: {herb: 90,  woody: 120}
     L4: {herb: 120, woody: 150}     # herbaceous green / uncured
-  live_default: "L4"                # scenario used for maps and patch summaries
+  # Scenario used for maps and patch summaries. L2 (herbaceous two-thirds
+  # cured) because real NM burning is concentrated in spring (50% of burned
+  # acres, Apr-Jun) and fall (34%, Oct-Nov), when herbaceous fuels are partly
+  # to mostly cured; see README "Why L2 live fuel moisture". L1 suits fall and
+  # winter, L4 only the monsoon.
+  live_default: "L2"
   out_dir: "data/processed/fire_behavior"
 
 # Past burns for comparison: TWIGS Treatment Index (attributes only).

@@ -43,3 +43,18 @@ Changing `years` in `config/pipeline.yml` does not rerun the 30 m LANDFIRE step 
 
 - `terra::patches()` on the full 30 m mask ran > 30 min on one core without finishing; replaced by `terra::sieve()` + AND with the input (matched patches to 2e-6 of cells on a 19M-cell test window, ~37× faster).
 - LANDFIRE LFPS v2 requires an email (`LANDFIRE_EMAIL` env var).
+
+## Fire behavior and landowner stages (added 2026-11-05)
+
+Timings with downloads cached, single process:
+
+| Stage | Time |
+|---|---|
+| PAD-US 4.1 Fee query (study bbox) | ~30 s |
+| Landowner raster (30 m, full mosaic) | ~25 s |
+| Rothermel lookup (2,880 rows) | ~1 min |
+| 30 m rate of spread / flame length raster | ~3.5 min, ~0.4 GB |
+| Patches with landowner, WUI and fire behavior (~53,000 patches, ~1,140 subfiresheds) | ~13 min |
+| Season comparison against TWIGS | ~12 s |
+
+Changing `fire_behavior.live_default` reruns the lookup, raster, patches and everything downstream, about 20 minutes in total. The `Rothermel` package adds 70 packages to `renv.lock`.

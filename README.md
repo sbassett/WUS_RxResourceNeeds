@@ -1,12 +1,12 @@
 # WUS_RxResourceNeeds
 Modeling the resources (personnel, quals, and equipment) needed to restore low-intensity wildfire regimes in the western United States.
 
-> **Status (2026-10-29):** the Burn Day Model, target area, and annual Rx target (AFN/BFN) are implemented and have been run for New Mexico, 1979–2025. The unit size/complexity, firing method, line production, resource mix, and state rollup stages are **wired-in stubs with placeholder parameters**: they run end to end but their numbers are not estimates. See the [status table](#status). [`spatialanalysis_pseudocode.md`](spatialanalysis_pseudocode.md) is the statement of project intent.
+> **Status (2026-11-05):** the Burn Day Model, target area, and annual Rx target (AFN/BFN) are implemented and have been run for New Mexico, 1979–2025. The unit size/complexity, firing method, line production, resource mix, and state rollup stages are **wired-in stubs with placeholder parameters**: they run end to end but their numbers are not estimates. See the [status table](#status). [`spatialanalysis_pseudocode.md`](spatialanalysis_pseudocode.md) is the statement of project intent.
 
 ## To do
 
 **Review modeling decisions**
-- [ ] **Choose the live fuel moisture scenario for rate of spread** (`fire_behavior.live_default`, currently L4 = green herbaceous, 120%/150%). It changes the hot-end area-weighted rate of spread about eight-fold (L1 cured 79, L2 54, L3 30, L4 10 chains/hr), because 55% of treatable area is in grass or grass-shrub fuel models. Spring and fall Rx windows in NM dry forest usually have cured herbaceous fuels (L1/L2); monsoon-season windows are green (L4). A season-dependent choice (cured outside the monsoon) is possible using burn-day timing.
+- [x] Live fuel moisture for rate of spread set to **L2** (herbaceous two-thirds cured: 60% herbaceous, 90% woody; `fire_behavior.live_default`). Rationale and sensitivity: [Why L2 live fuel moisture](#why-l2-live-fuel-moisture). Optional refinement: a season-dependent choice (L1 Nov-Mar, L2 Apr-Jun and Oct, L4 Jul-Sep).
 - [x] Replace EVT name patterns with reviewed BPS/EVT crosswalks (`config/treatable_bps.csv`, `config/treatable_evt_phys.csv`).
 - [x] Spot-check the 13 treatable BPS classes and the excluded forest classes in `config/treatable_bps.csv` (e.g. aspen and mesic mixed conifer, whose FRG varies by map zone).
 - [x] Use Swain ST1 Forest Plans thresholds for now (`thresholds.plan_set: forest`). Possible later refinements: sensitivity runs with `all`/`nonforest`, vegetation-dependent thresholds (forest bounds on tree pixels, non-forest on current shrub/grass), or NM-only medians from Swain's burn-plan repository.
@@ -44,7 +44,8 @@ To do:
 - [ ] Better NFDRS state-of-weather adjustment than the srad approximation.
 
 **Open questions from the pseudocode**
-- [ ] Validate predicted burn windows against observed Rx burns (WildCAD, etc.).
+- [ ] **Timing mismatch between modelled burn days and observed burns (logged, unresolved).** The burn-day model puts 37% of burn days in Jul-Sep and 34% in Dec-Mar, but 84% of actual Forest Service burned acres in NM fall in Apr-Jun and Oct-Nov (TWIGS). See [Known discrepancies](#known-discrepancies-between-modelled-and-observed-burning). To investigate: whether a monsoon/green-up screen, a snow or fuel-condition screen, or other constraints should be added to the burn-day definition; and whether observed timing mainly reflects staffing and smoke management.
+- [ ] Validate predicted burn windows against other observed Rx burns (WildCAD, burn plans), beyond the TWIGS seasonality comparison.
 - [ ] Investigate whether managed wildfire (wildfire managed for resource objectives, e.g. Gila and Aldo Leopold wilderness) competes with planned Rx for the same people and equipment. Questions: does managed-wildfire season overlap the burn windows predicted here; how many resources does it tie up; and how much of the dry-forest fire need (including the ~284k treatable ac in wilderness excluded from this planned-Rx estimate) does it meet?
 - [ ] Extend from the NM pilot to the western US.
 
@@ -79,7 +80,7 @@ Requires R ≥ 4.3 (built with R 4.6.1 on Windows) and internet access for first
 1. Restore packages: `renv::restore()`
 2. LANDFIRE's LFPS v2 API requires an email. Add it to your user `.Renviron`: `LANDFIRE_EMAIL=you@example.org`
 3. Build: `targets::tar_make()` (inspect with `targets::tar_visnetwork()`, read results with `targets::tar_read(rx_target)`)
-4. Test: `Rscript tests/run_tests.R` (292 expectations)
+4. Test: `Rscript tests/run_tests.R` (304 expectations)
 
 All settings live in `config/pipeline.yml`. The config is split into per-section targets, so changing `years` doesn't redo the 30 m LANDFIRE processing. First-time downloads can be run in parallel with `Rscript tools/prefetch_landfire.R fuels 1 2` (and `fuels 2 2`, `evt`, `bps`) and `Rscript tools/prefetch_gridmet.R 1979 2025` after `bbox`/`lf_tiles` are built.
 
@@ -192,10 +193,37 @@ In `R/rx_target.R`:
 - **Aspatial first:** Rothermel (1972) surface head fire spread is calculated once per fuel model, scenario, live-moisture scenario and slope (`R/rothermel.R`), giving a small lookup table (40 burnable Scott & Burgan models × 3 scenarios × 4 live scenarios × 6 slopes = 2,880 rows, `results/tables/rate_of_spread_lookup.csv`). It then joins to the 30 m fuel model (FBFM40) and slope maps (`R/fire_behavior.R`).
 - **Engine:** the `Rothermel` R package (Rothermel 1972 with Albini 1976 and Andrews et al. 2013 corrections, Scott & Burgan 2005 fuel models). Flame length comes from Byram (1959) using the package's reaction intensity.
 - **Scenarios** come straight from the burn-day thresholds (Forest Plans): *cool* = wettest dead fuels (1-hr 12%, 10-hr 14%, 100-hr 15%) and no wind; *hot* = driest fuels (4%, 6%, 7.5%) and the wind cap (4.5 m/s mid-flame, 16.2 km/h); *mid* = midpoints.
-- **Live moisture** is a separate choice (`fire_behavior.live_scenarios`, Scott & Burgan L1 cured to L4 green) and is the dominant uncertainty; see the to-do list and limitations.
+- **Live moisture** is a separate choice (`fire_behavior.live_scenarios`, Scott & Burgan L1 fully cured to L4 uncured) and is the dominant uncertainty. The default is **L2**; the reasoning and sensitivity are in [Why L2 live fuel moisture](#why-l2-live-fuel-moisture).
 - **Slope:** slope and wind interact in Rothermel (slope adds to the wind term), so slope is not a separable multiplier. The lookup is therefore built at slope bins of 0–25% (the treatable area is limited to ≤ 25%) and interpolated linearly per pixel.
 - **Validation:** against the SW Coordination Center reference tables for Anderson fuel model 1, rate of spread agrees within about 4–5% (flat and 30% slope) wherever the traditional wind limit does not bind, and flame length within about 3% (tests in `tests/testthat/test-rothermel.R`). Where that older limit binds, the package gives higher rates because it applies the Andrews et al. (2013) wind limit.
 - **Outputs:** `data/processed/fire_behavior/rx_fire_behavior_30m.tif` (layers `ros_cool`, `ros_hot` in chains/hr and `fl_cool`, `fl_hot` in feet, treatable cells only) and, per treatable patch, the area-weighted means, modal fuel model, and acres by flame length class (0–4, 4–8, > 8 ft).
+### Why L2 live fuel moisture
+The Rothermel rate of spread for grass, grass-shrub and shrub fuel models depends strongly on how much of the herbaceous fuel is cured, which Scott & Burgan (2005) express as four live moisture scenarios. This matters here because grass or grass-shrub models are the dominant fuel model for about 55% of treatable area (by patch: GR2 28%, GS2 20%, GR1 5%, GS1 2%). The default is L2. The evidence behind that choice, and its limits:
+
+| Scenario | Herbaceous moisture | Woody moisture | Meaning |
+|---|---|---|---|
+| L1 | 30% | 60% | herbaceous fully cured (dead) |
+| **L2** | **60%** | **90%** | **two-thirds cured** |
+| L3 | 90% | 120% | one-third cured |
+| L4 | 120% | 150% | uncured, green |
+
+(Values from Scott & Burgan 2005, as reproduced in the [IFTDSS fuel moisture tables](https://iftdss.firenet.gov/firenetHelp/help/pageHelp/content/00-concepts/fuelmoisturetables.htm).)
+
+1. **No published convention.** A search of NWCG guidance (PMS 437), the IFTDSS tables and the Scott & Burgan report found no rule naming L1 or L2 as the standard for prescribed fire modeling. The NWCG guide notes only that herbaceous moisture below 120% signals load transfer from live to dead fuel. The closest published analogue found (a 2019 Fire Ecology study of prescribed fire weather windows in the northern Great Plains, which paired prescription windows with the Rothermel model) varied live herbaceous to dead fine fuel ratios by season rather than fixing one scenario. Its full text could not be accessed, so the specific values it used are not known.
+2. **Observed timing of New Mexico burning.** Completed Forest Service broadcast burns in NM from the TWIGS Treatment Index (951 burns, 758,000 acres, 1990-2026) are concentrated in two seasons: April-June holds 50% of burned acres and October-November 34%; December-March holds 10% and July-September (monsoon) only 6%. Burning therefore happens mostly when herbaceous fuels are partly to mostly cured, not green.
+3. **Season-to-scenario reasoning (an assumption, not a cited NM source).** Spring burn windows come with last year's dormant growth plus some green-up, which fits partial curing (L2). Fall windows come after the growing season, which fits mostly cured fuels (L1 to L2). Winter windows fit fully cured fuels (L1). Only the monsoon, with 6% of burned acres, fits green fuels (L4). Weighting these by observed burned acres makes L2 the single scenario closest to the typical condition.
+4. **Sensitivity.** The scenario changes results a lot, so the choice is not neutral. Acre-weighted by each patch's dominant fuel model on flat ground:
+
+| Live scenario | Hot-end rate of spread (chains/hr) | Hot-end flame length (ft) | Mid-point rate of spread (chains/hr) | Mid-point flame length (ft) |
+|---|---|---|---|---|
+| L1 (cured) | 79 | 9.0 | 24 | 5.1 |
+| **L2 (default)** | **54** | **7.8** | **17** | **4.4** |
+| L3 | 30 | 6.0 | 6 | 2.7 |
+| L4 (green) | 10 | 3.7 | 3 | 2.1 |
+
+Timber litter and slash fuel models have no live fuel and do not change with the scenario. See `results/figures/rate_of_spread_live_moisture_sensitivity.png`.
+
+**Limits of this choice.** L2 is an assumption informed by observed timing and general phenology, not a measured live moisture for New Mexico; it should be checked against local knowledge or field curing observations. TWIGS covers Forest Service broadcast burns only. A single scenario cannot represent the full year, so a season-dependent version (L1 Nov-Mar, L2 Apr-Jun and Oct, L4 Jul-Sep) is listed as a refinement. To change the default, set `fire_behavior.live_default` in `config/pipeline.yml` (about 20 minutes to rerun).
 ### Downstream stubs
 In `R/downstream_stubs.R` and `R/state_rollup.R`, with **placeholder** parameters in `config/downstream_params.yml`:
 - **Unit size:** treatable area is cut into contiguous patches sharing a subfireshed and a landowner class (`R/patches.R`), then each patch's WUI and non-WUI acres are split into equal burn units under the size caps (WUI ≤ 441 ac; non-WUI ≤ `nonwui_split_ac`, default 1,000 ac). This is calibrated against past NM burns from TWIGS. Patch totals are checked against the LANDFIRE per-subfireshed totals. The complexity split is still a placeholder `complexity_share` applied to every size bin.
@@ -221,10 +249,11 @@ The full report is in [`docs/report.md`](docs/report.md).
 | Share of need in WUI | 42% statewide (41% of treatable area); per unit median 34%, IQR 4–72%, ranging 0–100% |
 | Annual need by landowner (PAD-US 4.1) | Federal 51% (USFS 176k, BLM 32k ac/yr), Private 45% (~189k ac/yr), State/Local 4% |
 | Burn units / yr | ~62,000 unit-burns from ~53,000 treatable patches |
-| Treatable fuels | Grass or grass-shrub models cover ~55% of treatable area (GR2 28%, GS2 20%, GR1 5%, GS1 2%); timber-understory TU5 21%, timber litter TL8 14% |
-| Rate of spread, live scenario L4 (area-weighted) | cool 0.3 chains/hr (flames 0.6 ft); hot 10.5 chains/hr (flames 3.4 ft) |
-| Flame length under hot conditions (L4) | 67% of treatable area 0-4 ft, 17% 4-8 ft, 17% > 8 ft; under cool conditions all < 4 ft |
-| Sensitivity of hot-end rate of spread to live moisture | L1 cured 79, L2 54, L3 30, L4 green 10 chains/hr (flames 9, 7.8, 6.0, 3.7 ft) |
+| Treatable fuels | Grass or grass-shrub models are the dominant fuel model for ~55% of treatable area, by patch (GR2 28%, GS2 20%, GR1 5%, GS1 2%); timber-understory TU5 21%, timber litter TL8 14% |
+| Rate of spread, live scenario L2 (area-weighted) | cool 0.8 chains/hr (flames 1.0 ft); hot 53.6 chains/hr (flames 7.5 ft); mid-point about 17 chains/hr (flames about 4.4 ft, by patch modal fuel on flat ground) |
+| Flame length under hot conditions (L2) | 16% of treatable area 0-4 ft, 46% 4-8 ft, 38% > 8 ft; under cool conditions all < 4 ft |
+| Sensitivity of hot-end rate of spread to live moisture | L1 cured 79, L2 54, L3 30, L4 green 10 chains/hr (flames 9, 7.8, 6.0, 3.7 ft); see [Why L2](#why-l2-live-fuel-moisture) |
+| Timing of burn days vs observed burns | mismatch: 37% of modelled burn days in Jul-Sep vs 6% of observed burned acres; 12% in Apr-Jun vs 50%; see [Known discrepancies](#known-discrepancies-between-modelled-and-observed-burning) |
 | Units that can host a 441 ac burn day | 881 (they carry 99.5% of AFN); the rest have < 441 treatable ac and never have a burn day |
 | Mean annual burn days per unit (units with burn days) | median 34 (IQR 25–47), interannual CV median 0.38 |
 | Trend in mean annual burn days | +2.1 days/decade (p = 0.05) |
@@ -242,7 +271,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | Daily in-Rx | `data/processed/burn_days/inrx_{year}.tif` | INT1U: 1 in Rx, 0 out, 255 = NA |
 | Fuels / WAF | `data/processed/landfire/waf_gridmet.tif`, `fuel_by_gridmet_cell.csv` | waf, modal fbfm40, canopy means, sheltered |
 | Target area | `data/processed/landfire/treatable_30m.tif`, `treatable_frac_gridmet.tif`, `project_landfire_stats.csv`, `treatable_bps_codes.csv`, `treatable_evt_codes.csv` | 30 m mask; fraction per cell; per-unit treatable_ac, afn_ac, heavy_fuel_share, mean_slope_deg, wui_area_share, wui_share |
-| Fire behavior | `data/processed/fire_behavior/rx_fire_behavior_30m.tif`; tables `rate_of_spread_lookup.csv`, `flame_length_class_acres.csv` | 30 m ros_cool, ros_hot (chains/hr), fl_cool, fl_hot (ft); lookup by fuel model, scenario, live scenario, slope |
+| Fire behavior | `data/processed/fire_behavior/rx_fire_behavior_30m.tif`; tables `rate_of_spread_lookup.csv`, `flame_length_class_acres.csv`, `burn_season_modeled_vs_observed_by_month.csv`, `burn_season_modeled_vs_observed_by_season.csv`; figure `burn_season_modeled_vs_observed.png` | 30 m ros_cool, ros_hot (chains/hr), fl_cool, fl_hot (ft); lookup by fuel model, scenario, live scenario, slope |
 | Daily rollup | `data/processed/rx_share_daily.parquet` | project_id, date, rx_share, rx_acres |
 | Synchrony | `data/processed/synchrony_pairs.parquet` | project_a, project_b, jaccard, weekly_cor |
 | Tables | `results/tables/` | annual_burn_days, burn_day_variability, weekly_exceedance, rx_target_afn_bfn, thresholds_applied, and `*_STUB.csv` downstream tables |
@@ -253,7 +282,7 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 
 | Stage | Status | Notes |
 |---|---|---|
-| Scaffolding (renv, targets, testthat) | Implemented | 292 test expectations |
+| Scaffolding (renv, targets, testthat) | Implemented | 304 test expectations |
 | Swain ST1 thresholds → config | Implemented | verified against extracted ST1 |
 | Study area + subfiresheds | Implemented | |
 | gridMET sourcing | Implemented | OPeNDAP via ncdf4 (climateR not needed) |
@@ -266,10 +295,32 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | Full 1979–2025 run | Done | see docs/run_notes.md |
 | Annual Rx target (AFN/BFN) | Implemented | |
 | Unit size + landowner from patches | Implemented | PAD-US 4.1 owners; equal-split units; TWIGS comparison |
-| Rate of spread + flame length (Rothermel) | Implemented | aspatial lookup joined to FBFM40 and slope; validated against published tables; live moisture choice pending |
+| Rate of spread + flame length (Rothermel) | Implemented | aspatial lookup joined to FBFM40 and slope; validated against published tables; live moisture L2 |
+| Modelled vs observed burn timing (TWIGS) | Implemented, **discrepancy logged** | modelled burn days are concentrated in months where little burning happens |
 | Unit complexity, firing, line production, resource mix | **Stub** | placeholder parameters |
 | State rollup + report | **Stub** (logic implemented, inputs placeholder) | docs/report.md (knitr; Quarto not installed) |
 
+## Known discrepancies between modelled and observed burning
+
+**Timing of burn windows (logged 2026-11-05, unresolved).** The modelled burn days do not match when New Mexico Forest Service burns actually happened. Modelled burn days are unit burn days (at least 441 treatable acres in prescription) weighted by each unit's annual need. Observed values are completed TWIGS broadcast burns (951 burns, 758,000 acres, 1990-2026), by burned acres.
+
+| Season | Modelled share of burn days | Observed share of burned acres | Observed share of burns (count) |
+|---|---|---|---|
+| Dec-Mar | 34% | 10% | 11% |
+| Apr-Jun | 12% | 50% | 30% |
+| Jul-Sep (monsoon) | 37% | 6% | 31% |
+| Oct-Nov | 17% | 34% | 27% |
+
+Month-by-month values: `results/tables/burn_season_modeled_vs_observed_by_month.csv`; figure: `results/figures/burn_season_modeled_vs_observed.png`.
+
+What it means and what it does not:
+- The burn-day definition (Swain et al. ST1 thresholds) is purely weather and fuel moisture. It puts many burn days in the monsoon, when fuel moisture is often in range, and in winter. Actual burning is concentrated in spring and fall.
+- Observed burning also reflects staffing, smoke management, closures, snow and fire-season restrictions, so the observed pattern is not a pure weather-window benchmark. The mismatch is a prompt to look for missing constraints, not proof that the windows are wrong.
+- The count-based shares show a spike of small burns in September (26% of burns but 4% of acres), so acres are the better comparison.
+- Consequence: the modelled timing of statewide resource demand (the weekly demand curve) will be shifted toward summer and winter relative to real burning. Total annual need (acres per year) is not affected, but the timing of demand and the synchrony between units are.
+- Related: because real burning is mostly in cured-fuel seasons, this mismatch is also part of why the live moisture default is L2 and not L4 (see above).
+
+Candidate fixes, none yet applied: a monsoon or green-up screen on the burn-day definition; restricting to observed burn months; weighting burn days by observed seasonal use. This is tracked in the [to-do list](#to-do).
 ## Known limitations
 
 - No bias correction of gridMET against RAWS.
@@ -281,7 +332,9 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 - WUI uses the broad CWiRRZ definition (anything within 2,400 m of buildings), so it includes much dry forest near scattered structures. WUI is applied to unit sizes only, not yet to unit complexity or patch delineation.
 - The minimum-patch filter uses GDAL sieve (see run notes). Patches crossing LANDFIRE tile seams are handled on the mosaic.
 - Rate of spread is Rothermel surface **head fire** spread. Prescribed fire is usually ignited as backing, flanking or strip head fires, so this measures fire potential and containment demand, not how fast a firing crew lays down fire. It ignores crown fire and spotting, and assumes wind blows upslope.
-- Rate of spread depends strongly on the live moisture scenario (see the to-do). With the default green scenario, grass and grass-shrub fuels spread slowly; cured fuels spread an order of magnitude faster.
+- Rate of spread depends strongly on the live moisture scenario. The default L2 (two-thirds cured) is an assumption supported by observed burn timing and general phenology, not a measured New Mexico value; green fuels (L4) would give rates about five times lower and fully cured fuels (L1) about 1.5 times higher at the hot end (see [Why L2](#why-l2-live-fuel-moisture)).
+- The hot scenario combines the driest fuels and the highest wind in the prescription window at the same time, and with L2 it gives flame lengths over 8 ft on 38% of treatable area. It is a bracket, not a typical condition; the mid-point scenario (about 4.4 ft) is closer to a typical prescription. Check against real prescriptions before using the hot scenario for planning.
+- Modelled burn days are concentrated in different months than real burning (see [Known discrepancies](#known-discrepancies-between-modelled-and-observed-burning)), so the timing of statewide resource demand is not yet realistic.
 - The Rothermel package applies the Andrews et al. (2013) wind limit, so for the fastest fuels at the hot end its rates can exceed BehavePlus results that use the traditional limit.
 - All downstream parameters are placeholders. State need figures show only that the pipeline works.
 
@@ -301,5 +354,8 @@ Share of treatable-cell days within each threshold (5 sample years): 10-hr FM 37
 | Scott & Burgan 2005, RMRS-GTR-153 (fuel bed depths) | https://www.fs.usda.gov/research/treesearch/9521 |
 | Rothermel 1972, INT-115 (surface fire spread), via the `Rothermel` R package (Vacchiano & Ascoli) | https://doi.org/10.2737/INT-RP-115 |
 | SW Coordination Center fire behavior reference tables, fuel model 1 (validation) | https://gacc.nifc.gov/swcc/predictive/outlooks/fire_behavior/reference_tables/documents/fm_1.htm |
+| Live fuel moisture scenarios, Scott & Burgan 2005 (as in IFTDSS fuel moisture tables) | https://iftdss.firenet.gov/firenetHelp/help/pageHelp/content/00-concepts/fuelmoisturetables.htm |
+| NWCG Fire Behavior Field Reference Guide, PMS 437 (live fuel moisture) | https://nwcg.gov/publications/pms437/fuel-moisture/live-fuel-moisture-content |
+| Seasonality of prescribed fire weather windows and predicted fire behavior, northern Great Plains (Fire Ecology 2019; only a search summary was reviewed, full text not accessed) | https://doi.org/10.1186/s42408-019-0027-y |
 | Cohen & Deeming 1985, PSW-GTR-82 (NFDRS) | https://www.fs.usda.gov/research/treesearch/27315 |
 | State boundary (Census cartographic, via `tigris`) | https://www.census.gov/geographies/mapping-files.html |
